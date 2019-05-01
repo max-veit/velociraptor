@@ -1,4 +1,7 @@
-"""Some utilities useful for the fitting step of dipole learning"""
+"""Some utilities useful for the fitting step of dipole learning
+
+TODO include the Lagrange multiplier method to keep charges neutral
+"""
 
 import logging
 import numpy as np
@@ -39,15 +42,63 @@ def merge_charges_dipoles(charges, dipoles):
     return charges_dipoles.reshape(n_train*4)
 
 
+def compute_cov_matrices(molecules_train, descriptor_matrix,
+                         sparse_envt_idces=None, sparse_jitter=1E-8,
+                         kernel_power=1, do_rank_check=True)
+    """Compute covariance (kernel) matrices for fitting
+
+    Parameters:
+        molecules_train     List of ASE Atoms objects containing the atomic
+                            coordinates of the molecules in the training set
+        descriptor_matrix   Matrix of descriptors (one row per environment)
+        sparse_envt_idces   Indices of sparse environments to choose
+        sparse_jitter       Constant diagonal to add to the sparse covariance
+                            matrix to make up for rank deficiency
+        kernel_power        Optional element-wise exponent to sharpen the
+                            kernel
+        do_rank_check       Check the rank of the sparse covariance matrix
+                            to make sure it's (relatively) well-conditioned?
+                            (default True)
+
+    Returns a tuple of the sparse covariance matrix (covariance of all the
+    sparse environments with each other) and the transformed covariance
+    matrix (covariance between charges+dipoles and sparse environments)
+
+    """
+    if sparse_envt_idces is not None:
+        sparse_descriptor_matrix = descriptor_matrix[sparse_envt_idces]
+        sparse_cov_matrix = sparse_descriptor_matrix.dot(
+                                sparse_descriptor_matrix.T)
+        if do_rank_check:
+            sparse_rank = np.linalg.matrix_rank(sparse_cov_matrix)
+            if sparse_rank < sparse_cov_matrix.shape[0]:
+                logger.warning("Sparse covariance matrix possibly " +
+                               "rank-deficient")
+    else:
+        #TODO haven't really thought much about the non-sparse case.
+        #     This should work, but I'm not sure it's the best way.
+        sparse_descriptor_matrix = descriptor_matrix
+        sparse_cov_matrix = descriptor_matrix.dot(descriptor_matrix.T)
+    if kernel_power == 1:
+        cov_matrix_transformed = transform_envts_charge_dipoles(
+                molecules_train, descriptor_matrix).dot(
+                        sparse_descriptor_matrix.T)
+    else:
+        sparse_cov_matrix = sparse_cov_matrix ** kernel_power
+        cov_matrix_transformed = transform_envts_charge_dipoles(
+                molecules_train, (descriptor_matrix.dot(
+                    sparse_descriptor_matrix.T))**kernel_power)
+    return sparse_cov_matrix, cov_matrix_transformed
+
 def compute_weights(charges_train, dipoles_train, molecules_train,
                     descriptor_matrix, reg_matrix_inv_diag,
                     sparse_envt_idces=None, sparse_jitter=1E-8,
-                    do_rank_check=True):
+                    kernel_power=1, do_rank_check=True):
     """Compute the weights to fit the given data
 
     Parameters:
         charges_train       Training data: Charges (one per molecule)
-        dipoles_train       Training data: Dipoles (")
+        dipoles_train       Training data: Dipoles (") (flattened)
         molecules_train     List of ASE Atoms objects containing the atomic
                             coordinates of the molecules in the training set
         descriptor_matrix   Matrix of descriptors (one row per environment)
@@ -55,6 +106,8 @@ def compute_weights(charges_train, dipoles_train, molecules_train,
         sparse_envt_idces   Indices of sparse environments to choose
         sparse_jitter       Constant diagonal to add to the sparse covariance
                             matrix to make up for rank deficiency
+        kernel_power        Optional element-wise exponent to sharpen the
+                            kernel
         do_rank_check       Check the rank of the sparse covariance matrix
                             to make sure it's (relatively) well-conditioned?
                             (default True)
@@ -71,23 +124,9 @@ def compute_weights(charges_train, dipoles_train, molecules_train,
     to fit in memory!  (offline version coming soon)
     """
     charges_dipoles_train = merge_charges_dipoles(charges_train, dipoles_train)
-    if sparse_envt_idces is not None:
-        sparse_descriptor_matrix = descriptor_matrix[sparse_envt_idces]
-        sparse_cov_matrix = sparse_descriptor_matrix.dot(
-                                sparse_descriptor_matrix.T)
-        if do_rank_check:
-            sparse_rank = np.linalg.matrix_rank(sparse_cov_matrix)
-            if sparse_rank < sparse_cov_matrix.shape[0]:
-                logger.warning("Sparse covariance matrix possibly " +
-                               "rank-deficient")
-    else:
-        #TODO haven't really thought much about the non-sparse case.
-        #     This should work, but I'm not sure it's the best way.
-        sparse_descriptor_matrix = descriptor_matrix
-        sparse_cov_matrix = descriptor_matrix.dot(descriptor_matrix.T)
-    cov_matrix_transformed = transform_envts_charge_dipoles(
-            molecules_train, sparse_descriptor_matrix).dot(
-                    sparse_descriptor_matrix.T)
+    sparse_cov_matrix, cov_matrix_transformed = compute_cov_matrices(
+            molecules_train, sparse_envt_idces, sparse_jitter,
+            kernel_power, do_rank_check)
     weights = np.linalg.solve(
         sparse_cov_matrix
         + (cov_matrix_transformed.T * reg_matrix_inv_diag).dot(
@@ -96,4 +135,113 @@ def compute_weights(charges_train, dipoles_train, molecules_train,
             charges_dipoles_train * reg_matrix_inv_diag))
     return weights
 
+
+def compute_weights_charge_constrained(
+                    charges_train, dipoles_train, molecules_train,
+                    descriptor_matrix, reg_matrix_inv_diag,
+                    sparse_envt_idces=None, sparse_jitter=1E-8,
+                    kernel_power=1, do_rank_check=True
+    """Compute the weights to find a constrained fit the given data
+
+    Uses Lagrange multipliers to fit the total charges exactly.
+    The resulting fitting equations are:
+
+    ╭ (K_s + K^T L^T Λ^-1 L K)x + K^T G^T 𝜆 = K^T L^T Λ^-1 μ
+    ┤
+    ╰ G K x = q
+
+    Parameters:
+        charges_train       Training data: Charges (one per molecule)
+        dipoles_train       Training data: Dipoles (") (flattened)
+        molecules_train     List of ASE Atoms objects containing the atomic
+                            coordinates of the molecules in the training set
+        descriptor_matrix   Matrix of descriptors (one row per environment)
+        reg_matrix_inv_diag Diagonal of the inverse regularization matrix
+        sparse_envt_idces   Indices of sparse environments to choose
+        sparse_jitter       Constant diagonal to add to the sparse covariance
+                            matrix to make up for rank deficiency
+        kernel_power        Optional element-wise exponent to sharpen the
+                            kernel
+        do_rank_check       Check the rank of the sparse covariance matrix
+                            to make sure it's (relatively) well-conditioned?
+                            (default True)
+
+    Returns the weights as well as the values of the Lagrange multipliers
+    """
+    sparse_cov_matrix, cov_matrix_transformed = compute_cov_matrices(
+            molecules_train, sparse_envt_idces, sparse_jitter,
+            kernel_power, do_rank_check)
+    cov_matrix_charges = cov_matrix_transformed[::4]
+    cov_matrix_dipoles = np.delete(cov_matrix_transformed,
+        np.arange(0, cov_matrix_transformed.shape[0], 4), axis=0)
+    # TODO still haven't found a better way to solve the equations than
+    #      to construct this huge block matrix
+    kernel_block = ((cov_matrix_dipoles.T * reg_matrix_inv_diag).dot(
+                        cov_matrix_dipoles) + sparse_cov_matrix)
+    # TODO is it possible to add a sparse jitter to the lower part of
+    #      the diagonal as well? (in place of the zeros)
+    n_charges = cov_matrix_charges.shape[0]
+    lhs_matrix = np.block(
+        [[kernel_block,       cov_matrix_charges.T],
+         [cov_matrix_charges, np.zeros((n_charges, n_charges))]])
+    rhs = np.concatenate(
+        (cov_matrix_dipoles.T.dot(dipoles_train * reg_matrix_inv_diag),
+         (charges_train)))
+    results = np.linalg.solve(lhs_matrix, rhs)
+    weights = results[:sparse_cov_matrix.shape[0]]
+    lagrange_multipliers = results[sparse_cov_matrix.shape[0]:]
+    return weights, lagrange_multipliers
+
+
+def compute_weights_two_model(charges_train, dipoles_train, molecules_train,
+                              reg_matrix_inv_diag,
+                              scalar_kernel_sparse, scalar_kernel_transformed,
+                              tensor_kernel_sparse, tensor_kernel_transformed):
+    """Compute the weights for the two-model problem:
+
+    μ_tot = x_1 K_1 + x_2 K_2
+
+    with two different sets of weights and kernel matrices.  Here
+    we specifically use the case of a sum of scalar and tensor models.
+
+    Parameters:
+        charges_train       Training data: Charges (one per molecule)
+        dipoles_train       Training data: Dipoles (") (flattened)
+        molecules_train     List of ASE Atoms objects containing the atomic
+                            coordinates of the molecules in the training set
+        reg_matrix_inv_diag Diagonal of the inverse regularization matrix
+        Kernel matrices:
+        scalar_kernel_sparse
+                            Covariance between the sparse environments
+                            of the scalar model
+        scalar_kernel_transformed
+                            Covariance between the molecular dipoles and
+                            the sparse environments of the scalar model
+        tensor_kernel_sparse
+                            Covariance between the sparse environments
+                            of the tensor model
+        tensor_kernel_transformed
+                            Covariance between the molecular dipoles and
+                            the sparse environments of the tensor model
+
+    Returns the scalar and tensor weights as a tuple
+    """
+    charges_dipoles_train = merge_charges_dipoles(charges_train, dipoles_train)
+    scalar_block = (scalar_kernel_transformed.T.dot(
+                scalar_kernel_transformed * reg_matrix_inv_diag)
+            + scalar_kernel_sparse)
+    tensor_block = (tensor_kernel_transformed.T.dot(
+                tensor_kernel_transformed * reg_matrix_inv_diag)
+            + tensor_kernel_sparse)
+    off_diag_block = scalar_kernel_transformed.T.dot(
+            tensor_kernel_transformed * reg_matrix_inv_diag)
+    lhs_matrix = np.block([[scalar_block,     off_diag_block],
+                           [off_diag_block.T, tensor_block]])
+    rhs = np.concatenate((scalar_kernel_transformed,
+                          tensor_kernel_transformed), axis=1).dot(
+                            charges_dipoles_train * reg_matrix_inv_diag)
+    weights_combined = np.linalg.solve(lhs_matrix, rhs)
+    weights_scalar = weights_combined[:scalar_kernel_sparse.shape[0]]
+    weights_tensor = weights_combined[scalar_kernel_sparse.shape[0]:]
+    return weights_scalar, weights_tensor
 
