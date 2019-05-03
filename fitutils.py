@@ -12,6 +12,15 @@ import transforms
 logger = logging.getLogger(__name__)
 
 
+def compute_rmse(weights, kernel_matrix, molecules_test):
+    """Compute the RMS error of the fit
+
+    This is the RMS of the _norm_ of the dipole errors, normalized
+    (for each geometry) by the corresponding number of atoms.
+    """
+    pass
+
+
 def make_reg_vector(dipole_sigma, charge_sigma, n_train):
     """Compute the diagonal of the regularization matrix.
 
@@ -89,6 +98,7 @@ def compute_cov_matrices(molecules_train, descriptor_matrix,
                 molecules_train, (descriptor_matrix.dot(
                     sparse_descriptor_matrix.T))**kernel_power)
     return sparse_cov_matrix, cov_matrix_transformed
+
 
 def compute_weights(charges_train, dipoles_train, molecules_train,
                     descriptor_matrix, reg_matrix_inv_diag,
