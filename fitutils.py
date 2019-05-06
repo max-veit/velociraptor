@@ -1,7 +1,4 @@
-"""Some utilities useful for the fitting step of dipole learning
-
-TODO include the Lagrange multiplier method to keep charges neutral
-"""
+"""Some utilities useful for the fitting step of dipole learning"""
 
 import logging
 import numpy as np
@@ -254,6 +251,9 @@ def compute_weights_charge_constrained(
     cov_matrix_charges = cov_matrix_transformed[::4]
     cov_matrix_dipoles = np.delete(cov_matrix_transformed,
         np.arange(0, cov_matrix_transformed.shape[0], 4), axis=0)
+    if sparse_cov_matrix.shape[0] < cov_matrix_charges.shape[0]:
+        logger.critical("More constraints than weights; the result will not "
+                        "respect the dipoles at all.")
     # TODO still haven't found a better way to solve the equations than
     #      to construct this huge block matrix
     kernel_block = ((cov_matrix_dipoles.T * reg_matrix_inv_diag).dot(
