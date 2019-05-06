@@ -217,7 +217,7 @@ def compute_weights_charge_constrained(
                     charges_train, dipoles_train, molecules_train,
                     descriptor_matrix, reg_matrix_inv_diag,
                     sparse_envt_idces=None, sparse_jitter=1E-8,
-                    kernel_power=1, do_rank_check=True
+                    kernel_power=1, do_rank_check=True):
     """Compute the weights to find a constrained fit the given data
 
     Uses Lagrange multipliers to fit the total charges exactly.

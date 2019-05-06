@@ -2,6 +2,9 @@
 
 
 import argparse
+import sys
+
+import fitutils
 
 
 parser = argparse.ArgumentParser(
@@ -22,6 +25,8 @@ parser.add_argument('scalar_kernel', help="Filename for the scalar "+
 #TODO how does soapfast store the sparse indices?
 parser.add_argument('tensor_kernel', help="Filename for the l=1 " +
                         "kernel, in the format written by SOAPFATS")
+parser.add_argument('weights_output', help="Name of a file into which to " +
+     "write the output weights")
 # The weights could also be incorporated directly into the kernel
 parser.add_argument('-ws', '--scalar-weight', type=float, help="Weight of " +
     "the scalar component (charges) in the model")
@@ -32,3 +37,14 @@ parser.add_argument('-rc', '--charge-regularization', type=float,
 parser.add_argument('-rd', '--dipole-regularization', type=float,
                     help="Regularization coefficient (sigma) for " +
                          "dipole components")
+parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
+                    help="How to control the total charge of each geometry. " +
+                    "Choices are 'none' (just fit dipoles), 'fit', (fit " +
+                    "dipoles and charges), and 'lagrange' (constrain total "+
+                    "charges exactly using Lagrange multipliers).",
+                    default='fit')
+
+if __name__ == "__main__":
+    args = parser.parse_args(sys.argv)
+    weights_scalar, weights_tensor = fitutils.compute_weights_two_model()
+    save_weights(args.weights_scalar, weights_tensor)
