@@ -3,7 +3,7 @@
 import logging
 import numpy as np
 
-import transforms
+import transform
 
 
 logger = logging.getLogger(__name__)
@@ -80,12 +80,9 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, geoms_test,
         return_rmse Whether to return the RMS errors to summarize the
                     residuals
 
-    Return value is either a numpy array or a tuple.  Depending on what
-    is requested, the order will be one of:
-        dipole_residuals
-        (dipole_residuals, charge_residuals)
-        (dipole_residuals, dipole_rmse)
-        (dipole_residuals, charge_residuals, dipole_rmse, charge_rmse)
+    Return value is a dictionary of numpy arrays.  Depending on what
+    is requested, one or more of the following keys will be present:
+        dipole_residuals, charge_residuals, dipole_rmse, charge_rmse
     """
     if charges_included:
         charges_test = [geom.info.get('total_charge', 0.)
@@ -96,23 +93,22 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, geoms_test,
     natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
     n_test = len(geoms_test)
     residuals = weights.dot(kernel_matrix) - data_test
+    residuals_out = dict()
     if charges_included:
         charge_residuals, dipole_residuals = split_charges_dipoles(residuals)
+        residuals_out['charge_residuals'] = charge_residuals
+    else:
+        dipole_residuals = residuals
+    residuals_out['dipole_residuals'] = dipole_residuals
     if return_rmse:
         dipole_rmse = np.sqrt(np.sum((dipole_residuals / natoms_test)**2)
                               / n_test)
+        residuals_out['dipole_rmse'] = dipole_rmse
         if charges_included:
             charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
                                   / n_test)
-            return (dipole_residuals, charge_residuals,
-                    dipole_rmse, charge_rmse)
-        else:
-            return (dipole_residuals, dipole_rmse)
-    else:
-        if charges_included:
-            return (dipole_residuals, charge_residuals)
-        else:
-            return dipole_residuals
+            residuals_out['charge_rmse'] = charge_rmse
+    return residuals_out
 
 
 def compute_cov_matrices(molecules_train, descriptor_matrix,
