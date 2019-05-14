@@ -2,12 +2,16 @@
 
 
 import argparse
+import logging
 import sys
 
 import ase
 
 import fitutils
 import transform
+
+
+logger = logging.getLogger(__name__)
 
 
 parser = argparse.ArgumentParser(
@@ -24,12 +28,12 @@ parser.epilog("Charges are assumed to sum to zero for each geometry, unless "
     "will not be read.")
 parser.add_argument('scalar_kernel_sparse', help="Filename for the "
     "sparse-sparse (MM) scalar kernel, in atomic environment space")
-parser.add_argument('scalar_kernel', help="Filename for the sparse-full "
-    "(MN) scalar kernel, in atomic environment space")
+parser.add_argument('scalar_kernel', help="Filename for the full-sparse "
+    "(NM) scalar kernel, in atomic environment space")
 parser.add_argument('tensor_kernel_sparse', help="Filename for the "
     "sparse-sparse tensor kernel")
 parser.add_argument('tensor_kernel', help="Filename for the "
-    "sparse-full tensor kernel, mapping environments to Cartesian components")
+    "full-sparse tensor kernel, mapping Cartesian components to environments")
 parser.add_argument('weights_output', help="Name of a file into which to "
      "write the output weights")
 parser.add_argument('-ws', '--scalar-weight', type=float, help="Weight of "
@@ -76,33 +80,69 @@ def get_charges(geometries):
     return np.array([geom.info.get('total_charge', 0.) for geom in geometries])
 
 
-if __name__ == "__main__":
-    args = parser.parse_args(sys.argv)
-    if args.charge_mode == 'none':
-        raise ValueError('Bad idea')
-    if (args.charge_mode == 'lagrange') and (args.tensor_weight != 0.):
-        raise ValueError("Charge constraints not yet implemented together "
-                         "with tensor fitting")
-    kernels = load_kernels(args)
+def compute_weights(args):
+    if (args.scalar_weight == 0) and (args.tensor_weight == 0):
+        raise ValueError("Both weights set to zero, can't fit with no data.")
+    elif ((args.charge_mode != 'fit') and (args.scalar_weight != 0)
+                                      and (args.tensor_weight != 0)):
+        raise ValueError("Combined fitting only works with 'fit' charge-mode")
+    (scalar_kernel_sparse, scalar_kernel_full_sparse,
+     tensor_kernel_sparse, tensor_kenel_full_sparse) = load_kernels(args)
     geometries = ase.io.read(args.geometries)
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
-    regularizer = fitutils.make_reg_vector(args.charge_regularization,
-                                           args.dipole_regularization,
-                                           len(geometries))
+    if args.charge_mode == 'none':
+        regularizer = args.charge_regularization * np.ones(len(geometries))
+    else:
+        regularizer = fitutils.make_reg_vector(args.charge_regularization,
+                                               args.dipole_regularization,
+                                               len(geometries))
     scalar_kernel_transformed = transform.transform_envts_charge_dipoles(
-            geometries, kernels[1].T)
-    kernels_transformed = (kernels[0], scalar_kernel_transformed,
-                           kernels[2], kernels[3].T) #TODO(max) check this
-    if args.charge_mode == 'lagrange':
-        #TODO(max) aaargh, this function takes descriptors not kernel matrices.
-        #Fix it.
-        weights = fitutils.compute_weights_charge_constrained(
-                charges, dipoles, geometries,
-                kernels[0], scalar_kernel_transformed, regularizer,
-                sparse_jitter=args.sparse_jitter)
-        np.save(args.weights_output, weights)
+            geometries, scalar_kernel_full_sparse)
+    # kernels_transformed = (kernels[0], scalar_kernel_transformed,
+                           # kernels[2], kernels[3]) #TODO(max) check this
+    if args.charge_mode == 'none':
+        if args.tensor_weight == 0:
+            return fitutils.compute_weights(
+                    dipoles, scalar_kernel_sparse,
+                    scalar_kernel_transformed, regularizer)
+        elif args.scalar_weight == 0:
+            return fitutils.compute_weights(
+                    dipoles, tensor_kernel_sparse,
+                    tensor_kernel_full_sparse, regularizer)
+        else:
+            raise ValueError("Can't do combined fitting without charges")
     elif args.charge_mode == 'fit':
-        weights_combined = fitutils.compute_weights_two_model(
-            charges, dipoles, geometries, regularizer, *kernels_transformed)
-        np.save(args.weights_output, weights_combined)
+        if args.tensor_weight == 0:
+            return fitutils.compute_weights_charges(
+                    charges, dipoles,
+                    scalar_kernel_sparse, scalar_kernel_transformed,
+                    reg_matrix_inv_diag)
+        elif args.scalar_weight == 0:
+            logger.warn("Doing tensor kernel fitting with charges; since l=1 "
+                        "kernels are insensitive to scalars, this is exactly "
+                        "the same as tensor fitting without charges.")
+            return fitutils.compute_weights(
+                    dipoles, tensor_kernel_sparse,
+                    tensor_kernel_full_sparse, regularizer)
+        else:
+            return fitutils.compute_weights_two_model(
+                        charges, dipoles,
+                        scalar_kernel_sparse, scalar_kernel_transformed,
+                        tensor_kernel_sparse, tensor_kernel_full_sparse)
+    elif args.charge_mode == 'lagrange':
+        if args.tensor_weight != 0:
+            raise ValueError("Charge constraints not yet implemented together "
+                             "with tensor fitting")
+        weights = fitutils.compute_weights_charge_constrained(
+                charges, dipoles,
+                scalar_kernel_sparse, scalar_kernel_transformed, regularizer)
+        return weights
+    else:
+        raise ValueError("Unrecognized charge mode '%s'".format(charge_mode))
+
+
+if __name__ == "__main__":
+    args = parser.parse_args(sys.argv)
+    weights = compute_weights(args)
+    np.save(args.weights_output, weights)
