@@ -21,41 +21,49 @@ done
 mkdir PS_files
 
 # Get L=0 power spectrum
-python lib/SOAPFAST/soapfast/get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 0 -nc ${nc1} -f qm7b.xyz -o PS_files/PS0_qm7b
+get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 0 -nc ${nc1} -f qm7b.xyz -o PS_files/PS0_qm7b
 
 # Get L=1 power spectrum
-python lib/SOAPFAST/soapfast/get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 1 -nc ${nc2} -f qm7b.xyz -o PS_files/PS1_qm7b -ns ${ns}
-python lib/SOAPFAST/soapfast/get_power_spectrum.py -rc 4.0 -c H C N O S Cl -s H C N O S Cl -lm 1 -f qm7b.xyz -sf PS_files/PS1_qm7b -o PS_files/PS1_qm7b
+get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 1 -nc ${nc2} -f qm7b.xyz -o PS_files/PS1_qm7b -ns ${ns}
+get_power_spectrum.py -rc 4.0 -c H C N O S Cl -s H C N O S Cl -lm 1 -f qm7b.xyz -sf PS_files/PS1_qm7b -o PS_files/PS1_qm7b
 
 # Find atomic power spectra and sparsify on environments
-python lib/SOAPFAST/soapfast/scripts/get_atomic_power_spectrum.py -lm 0 -p PS_files/PS0_qm7b.npy -o PS_files/PS0_qm7b_atomic -f qm7b.xyz
-python lib/SOAPFAST/soapfast/scripts/get_atomic_power_spectrum.py -lm 1 -p PS_files/PS1_qm7b.npy -o PS_files/PS1_qm7b_atomic -f qm7b.xyz
+get_atomic_power_spectrum.py -lm 0 -p PS_files/PS0_qm7b.npy -o PS_files/PS0_qm7b_atomic -f qm7b.xyz
+get_atomic_power_spectrum.py -lm 1 -p PS_files/PS1_qm7b.npy -o PS_files/PS1_qm7b_atomic -f qm7b.xyz
 if [ ${ne} != -1 ];then
  # We want to use the same environments to sparsify on the L=0 and L=1
- python lib/SOAPFAST/soapfast/scripts/do_fps.py -p PS_files/PS0_qm7b_atomic.npy -n ${ne} -o PS_files/PS0_envs
- python lib/SOAPFAST/soapfast/scripts/apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_qm7b_atomic_sparse
- python lib/SOAPFAST/soapfast/scripts/apply_fps.py -p PS_files/PS1_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS1_qm7b_atomic_sparse
+ # First get sparsification details
+ do_fps.py -p PS_files/PS0_qm7b_atomic.npy -n ${ne} -o PS_files/PS0_envs
+ # Apply sparsification
+ apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_qm7b_atomic_sparse
+ apply_fps.py -p PS_files/PS1_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS1_qm7b_atomic_sparse
 else
  # We want to use different environments
- python lib/SOAPFAST/soapfast/scripts/do_fps.py -p PS_files/PS0_qm7b_atomic.npy -n ${ne0} -o PS_files/PS0_envs
- python lib/SOAPFAST/soapfast/scripts/do_fps.py -p PS_files/PS1_qm7b_atomic.npy -n ${ne1} -o PS_files/PS1_envs
- python lib/SOAPFAST/soapfast/scripts/apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_qm7b_atomic_sparse
- python lib/SOAPFAST/soapfast/scripts/apply_fps.py -p PS_files/PS1_qm7b_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS1_qm7b_atomic_sparse
- python lib/SOAPFAST/soapfast/scripts/apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS01_qm7b_atomic_sparse
+ # First get sparsification details
+ do_fps.py -p PS_files/PS0_qm7b_atomic.npy -n ${ne0} -o PS_files/PS0_envs
+ do_fps.py -p PS_files/PS1_qm7b_atomic.npy -n ${ne1} -o PS_files/PS1_envs
+ # Apply sparsification
+ apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_qm7b_atomic_sparse
+ apply_fps.py -p PS_files/PS1_qm7b_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS1_qm7b_atomic_sparse
+ apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS01_qm7b_atomic_sparse
 fi
 
 
 # Generate sparsified kernels
 if [ ${ne} != -1 ];then
  # Here we only have two power spectra, because we used the same environments for L=0 and L=1
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -s PS_files/PS0_qm7b_natoms.npy NONE -o K0_NM
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_MM
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -s PS_files/PS1_qm7b_natoms.npy NONE -o K1_NM
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
+ # Get L=0 kernel matrices
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -s PS_files/PS0_qm7b_natoms.npy NONE -o K0_NM
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_MM
+ # Get L=1 kernel matrices
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -s PS_files/PS1_qm7b_natoms.npy NONE -o K1_NM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
 else
  # We have three power spectra that must be used to build our sparsifieid kernels
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -s PS_files/PS0_qm7b_natoms.npy NONE -o K0_NM
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_MM
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b.npy PS_files/PS01_qm7b_atomic_sparse.npy -s PS_files/PS1_qm7b_natoms.npy NONE -o K1_NM
- python lib/SOAPFAST/soapfast/get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
+ # Get L=0 kernel matrices
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -s PS_files/PS0_qm7b_natoms.npy NONE -o K0_NM
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_MM
+ # Get L=1 kernel matrices
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b.npy PS_files/PS01_qm7b_atomic_sparse.npy -s PS_files/PS1_qm7b_natoms.npy NONE -o K1_NM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
 fi
