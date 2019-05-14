@@ -21,10 +21,10 @@ done
 mkdir PS_files
 
 # Get L=0 power spectrum
-get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 0 -nc ${nc1} -f qm7b.xyz -o PS_files/PS0_qm7b
+get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 0 -nc ${nc0} -f qm7b.xyz -o PS_files/PS0_qm7b
 
 # Get L=1 power spectrum
-get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 1 -nc ${nc2} -f qm7b.xyz -o PS_files/PS1_qm7b -ns ${ns}
+get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 1 -nc ${nc1} -f qm7b.xyz -o PS_files/PS1_qm7b -ns ${ns}
 get_power_spectrum.py -rc 4.0 -c H C N O S Cl -s H C N O S Cl -lm 1 -f qm7b.xyz -sf PS_files/PS1_qm7b -o PS_files/PS1_qm7b
 
 # Find atomic power spectra and sparsify on environments
@@ -48,7 +48,6 @@ else
  apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS01_qm7b_atomic_sparse
 fi
 
-
 # Generate sparsified kernels
 if [ ${ne} != -1 ];then
  # Here we only have two power spectra, because we used the same environments for L=0 and L=1
@@ -67,3 +66,6 @@ else
  get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b.npy PS_files/PS01_qm7b_atomic_sparse.npy -s PS_files/PS1_qm7b_natoms.npy NONE -o K1_NM
  get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
 fi
+
+# Convert spherical kernels to vector kernels
+python spherical_to_cartesian_kernel.py
