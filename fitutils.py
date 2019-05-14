@@ -1,7 +1,4 @@
-"""Some utilities useful for the fitting step of dipole learning
-
-TODO include the Lagrange multiplier method to keep charges neutral
-"""
+"""Some utilities useful for the fitting step of dipole learning"""
 
 import logging
 import numpy as np
@@ -10,15 +7,6 @@ import transforms
 
 
 logger = logging.getLogger(__name__)
-
-
-def compute_rmse(weights, kernel_matrix, molecules_test):
-    """Compute the RMS error of the fit
-
-    This is the RMS of the _norm_ of the dipole errors, normalized
-    (for each geometry) by the corresponding number of atoms.
-    """
-    pass
 
 
 def make_reg_vector(dipole_sigma, charge_sigma, n_train):
@@ -51,9 +39,85 @@ def merge_charges_dipoles(charges, dipoles):
     return charges_dipoles.reshape(n_train*4)
 
 
+def split_charges_dipoles(charges_dipoles):
+    """Split a combined charges-dipoles array into two
+
+    Return a tuple containing the charges and (2-D) diplole array
+
+    This is effectively the inverse of merge_charges_dipoles().
+    """
+    n_train = charges_dipoles.size / 4
+    charges_dipoles = charges_dipoles.reshape((n_train, 4))
+    return charges_dipoles[:,0], charges_dipoles[:, 1:4]
+
+
+def compute_residuals(weights, kernel_matrix, dipoles_test, geoms_test,
+                      charges_included=True, return_rmse=True):
+    """Compute the residuals for the given fit
+
+    If the RMSE is requested, return the RMS of the _norm_ of the dipole
+    residuals, normalized (for each geometry) by the corresponding
+    number of atoms.  For charges, the RMSE of the total charge residual
+    is returned, normalized again by the number of atoms in the geometry.
+
+    Parameters:
+        weights     Weights computed for the fit
+        kernel_matrix
+                    Kernel between model basis functions (rows) and test
+                    dipoles, optionally with charges.  Order should be
+                    (charge), x, y, z, per configuration.
+        dipoles_test
+                    Computed ("exact") dipoles for the test set
+        geoms_test  List of ASE-compatible Atoms objects containing the
+                    atomic coordinates of all the geometries in the test
+                    set
+        charges_included
+                    Whether (total) charges are included in the kernel
+                    matrix above.  If true, the charge residual is
+                    computed and returned separately from the dipoles.
+                    Computed/exact total charges are extracted from
+                    geoms_test ('total_charge' property), default 0.
+        return_rmse Whether to return the RMS errors to summarize the
+                    residuals
+
+    Return value is either a numpy array or a tuple.  Depending on what
+    is requested, the order will be one of:
+        dipole_residuals
+        (dipole_residuals, charge_residuals)
+        (dipole_residuals, dipole_rmse)
+        (dipole_residuals, charge_residuals, dipole_rmse, charge_rmse)
+    """
+    if charges_included:
+        charges_test = [geom.info.get('total_charge', 0.)
+                        for geom in geoms_test]
+        data_test = merge_charges_dipoles(charges_test, dipoles_test)
+    else:
+        data_test = dipoles_test
+    natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
+    n_test = len(geoms_test)
+    residuals = weights.dot(kernel_matrix) - data_test
+    if charges_included:
+        charge_residuals, dipole_residuals = split_charges_dipoles(residuals)
+    if return_rmse:
+        dipole_rmse = np.sqrt(np.sum((dipole_residuals / natoms_test)**2)
+                              / n_test)
+        if charges_included:
+            charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
+                                  / n_test)
+            return (dipole_residuals, charge_residuals,
+                    dipole_rmse, charge_rmse)
+        else:
+            return (dipole_residuals, dipole_rmse)
+    else:
+        if charges_included:
+            return (dipole_residuals, charge_residuals)
+        else:
+            return dipole_residuals
+
+
 def compute_cov_matrices(molecules_train, descriptor_matrix,
                          sparse_envt_idces=None, sparse_jitter=1E-8,
-                         kernel_power=1, do_rank_check=True)
+                         kernel_power=1, do_rank_check=True):
     """Compute covariance (kernel) matrices for fitting
 
     Parameters:
@@ -150,7 +214,7 @@ def compute_weights_charge_constrained(
                     charges_train, dipoles_train, molecules_train,
                     descriptor_matrix, reg_matrix_inv_diag,
                     sparse_envt_idces=None, sparse_jitter=1E-8,
-                    kernel_power=1, do_rank_check=True
+                    kernel_power=1, do_rank_check=True):
     """Compute the weights to find a constrained fit the given data
 
     Uses Lagrange multipliers to fit the total charges exactly.
@@ -159,6 +223,9 @@ def compute_weights_charge_constrained(
     ╭ (K_s + K^T L^T Λ^-1 L K)x + K^T G^T 𝜆 = K^T L^T Λ^-1 μ
     ┤
     ╰ G K x = q
+
+    (where G just sums over the atoms in a molecule to obtain total
+    charge)
 
     Parameters:
         charges_train       Training data: Charges (one per molecule)
@@ -184,6 +251,9 @@ def compute_weights_charge_constrained(
     cov_matrix_charges = cov_matrix_transformed[::4]
     cov_matrix_dipoles = np.delete(cov_matrix_transformed,
         np.arange(0, cov_matrix_transformed.shape[0], 4), axis=0)
+    if sparse_cov_matrix.shape[0] < cov_matrix_charges.shape[0]:
+        logger.critical("More constraints than weights; the result will not "
+                        "respect the dipoles at all.")
     # TODO still haven't found a better way to solve the equations than
     #      to construct this huge block matrix
     kernel_block = ((cov_matrix_dipoles.T * reg_matrix_inv_diag).dot(
@@ -234,7 +304,10 @@ def compute_weights_two_model(charges_train, dipoles_train, molecules_train,
                             Covariance between the molecular dipoles and
                             the sparse environments of the tensor model
 
-    Returns the scalar and tensor weights as a tuple
+    Returns the scalar and tensor weights combined into a single vector.
+    The first n_sparse components are the scalar weights (n_sparse is the
+    number of rows of the scalar kernel matrix), the rest are the tensor
+    weights.
     """
     charges_dipoles_train = merge_charges_dipoles(charges_train, dipoles_train)
     scalar_block = (scalar_kernel_transformed.T.dot(
@@ -251,7 +324,5 @@ def compute_weights_two_model(charges_train, dipoles_train, molecules_train,
                           tensor_kernel_transformed), axis=1).dot(
                             charges_dipoles_train * reg_matrix_inv_diag)
     weights_combined = np.linalg.solve(lhs_matrix, rhs)
-    weights_scalar = weights_combined[:scalar_kernel_sparse.shape[0]]
-    weights_tensor = weights_combined[scalar_kernel_sparse.shape[0]:]
-    return weights_scalar, weights_tensor
+    return weights_combined
 
