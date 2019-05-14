@@ -51,8 +51,8 @@ def split_charges_dipoles(charges_dipoles):
     return charges_dipoles[:,0], charges_dipoles[:, 1:4]
 
 
-def compute_residuals(weights, kernel_matrix, dipoles_test, geoms_test,
-                      charges_included=True, return_rmse=True):
+def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
+                      charges_test=None, return_rmse=True):
     """Compute the residuals for the given fit
 
     If the RMSE is requested, return the RMS of the _norm_ of the dipole
@@ -62,36 +62,55 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, geoms_test,
 
     Parameters:
         weights     Weights computed for the fit
+                    In the case of a multi-model fit with independent
+                    kernels (i.e. a block-diagonal total kernel matrix),
+                    this may also be a list of arrays of weights, one
+                    for each model.  The residual is computed as the
+                    difference from the sum of each independent model.
         kernel_matrix
                     Kernel between model basis functions (rows) and test
                     dipoles, optionally with charges.  Order should be
                     (charge), x, y, z, per configuration.
+                    As above, this may also be a list of kernel matrices
+                    of the same length as 'weights'.
         dipoles_test
                     Computed ("exact") dipoles for the test set
-        geoms_test  List of ASE-compatible Atoms objects containing the
-                    atomic coordinates of all the geometries in the test
-                    set
-        charges_included
-                    Whether (total) charges are included in the kernel
-                    matrix above.  If true, the charge residual is
+        natoms_test List containing the number of atoms for each geometry
+                    in the test set (for normalization)
+    Optional arguments:
+        charges_test
+                    If provided, the charge residual is additionally
                     computed and returned separately from the dipoles.
-                    Computed/exact total charges are extracted from
-                    geoms_test ('total_charge' property), default 0.
         return_rmse Whether to return the RMS errors to summarize the
-                    residuals
+                    residuals, including as fractions of the intrinsic
+                    errors (standard deviations per atom) of the dipoles
+                    and charges.
 
     Return value is a dictionary of numpy arrays.  Depending on what
     is requested, one or more of the following keys will be present:
-        dipole_residuals, charge_residuals, dipole_rmse, charge_rmse
+        dipole_residuals, charge_residuals, dipole_rmse, charge_rmse,
+        dipole_frac, charge_frac
     """
+    charges_included = (charges_test is not None)
+    if hasattr(weights, 'shape') and len(weights.shape) == 1:
+        # Assume we've been given arrays, not lists of arrays
+        if hasattr(kernel_matrix) and len(kernel_matrix.shape) != 2:
+            raise ValueError("Confused about whether you're trying to specify "
+                             "one set or multiple sets of weights and kernel")
+        weights = [weights]
+        kernel_matrix = [kernel_matrix]
+    elif len(weights) != len(kernel_matrix):
+        raise ValueError("Must supply the same number of sets of weights "
+                         "and kernel matrices")
     if charges_included:
-        charges_test = [geom.info.get('total_charge', 0.)
-                        for geom in geoms_test]
         data_test = merge_charges_dipoles(charges_test, dipoles_test)
     else:
         data_test = dipoles_test
-    natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
-    n_test = len(geoms_test)
+    n_test = len(natoms_test)
+    natoms_test = np.array(natoms_test)
+    predicted = weights.dot(kernel_matrix)
+    if (weights_second is not None):
+        predicted += weights_second + 
     residuals = weights.dot(kernel_matrix) - data_test
     residuals_out = dict()
     if charges_included:
@@ -104,10 +123,16 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, geoms_test,
         dipole_rmse = np.sqrt(np.sum((dipole_residuals / natoms_test)**2)
                               / n_test)
         residuals_out['dipole_rmse'] = dipole_rmse
+        #TODO(max) -- should this be per-atom?
+        dipole_std = np.std(dipoles_test / natoms_test)
+        residuals_out['dipole_frac'] = dipole_rmse / dipole_std
         if charges_included:
             charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
                                   / n_test)
             residuals_out['charge_rmse'] = charge_rmse
+            #TODO(max) same question
+            charge_std = np.std(charges_test / natoms_test)
+            residuals_out['charge_frac'] = charge_rmse / charge_std
     return residuals_out
 
 
