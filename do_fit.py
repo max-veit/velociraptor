@@ -7,6 +7,8 @@ import logging
 import sys
 
 import ase
+import ase.io
+import numpy as np
 
 import fitutils
 import transform
@@ -188,13 +190,13 @@ def compute_own_residuals(
 
 
 if __name__ == "__main__":
-    args = parser.parse_args(sys.argv)
+    args = parser.parse_args()
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
      tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
-    geometries = ase.io.read(args.geometries)
+    geometries = ase.io.read(args.geometries, ':')
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
-        scalar_kernel_full_sparse, tensor_kernel_full_sparse)
+        geometries, scalar_kernel_full_sparse, tensor_kernel_full_sparse)
     #TODO(max) do this before the transform to save time and memory
     if args.num_training_geometries > 0:
         n_train = args.num_training_geometries
