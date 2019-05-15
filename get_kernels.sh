@@ -63,7 +63,7 @@ else
  get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS0_qm7b_atomic_sparse.npy -s PS_files/PS0_qm7b_natoms.npy NONE -o K0_NM
  get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_MM
  # Get L=1 kernel matrices
- get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b.npy PS_files/PS01_qm7b_atomic_sparse.npy -s PS_files/PS1_qm7b_natoms.npy NONE -o K1_NM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b.npy PS_files/PS01_qm7b_atomic_sparse.npy -s PS_files/PS1_qm7b_natoms.npy NONE -o K1_NM
  get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS01_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
 fi
 
