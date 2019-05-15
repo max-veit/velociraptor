@@ -44,11 +44,11 @@ parser.add_argument('-wt', '--tensor-weight', type=float, metavar='weight',
     help="Weight of the tensor component (point dipoles) in the model",
     required=True)
 parser.add_argument('-rc', '--charge-regularization', type=float, default=1.0,
-                    metavar='sigma2_q', help="Regularization coefficient "
-                    "(sigma^2) for total charges")
+                    metavar='sigma_q', help="Regularization coefficient "
+                    "(sigma) for total charges")
 parser.add_argument('-rd', '--dipole-regularization', type=float,
-                    required=True, metavar='sigma2_mu', help="Regularization "
-                    "coefficient (sigma^2) for dipole components")
+                    required=True, metavar='sigma_mu', help="Regularization "
+                    "coefficient (sigma) for dipole components")
 parser.add_argument('-nt', '--num-training-geometries', type=int,
                     metavar='<n>', default=-1,
                     help="Keep only the first <n> geometries for training.")
@@ -112,11 +112,11 @@ def compute_weights(args, dipoles, charges,
                                       and (args.tensor_weight != 0)):
         raise ValueError("Combined fitting only works with 'fit' charge-mode")
     if args.charge_mode == 'none':
-        regularizer = args.charge_regularization * np.ones(len(charges))
+        regularizer = args.dipole_regularization * np.ones((dipoles.size,))
     else:
-        regularizer = fitutils.make_reg_vector(args.charge_regularization,
-                                               args.dipole_regularization,
-                                               len(charges))
+        regularizer = fitutils.make_inv_reg_vector(args.charge_regularization,
+                                                   args.dipole_regularization,
+                                                   len(charges))
     if args.charge_mode == 'none':
         if args.tensor_weight == 0:
             return fitutils.compute_weights(
@@ -133,7 +133,7 @@ def compute_weights(args, dipoles, charges,
             return fitutils.compute_weights_charges(
                     charges, dipoles,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    reg_matrix_inv_diag)
+                    regularizer)
         elif args.scalar_weight == 0:
             logger.warn("Doing tensor kernel fitting with charges; since l=1 "
                         "kernels are insensitive to scalars, this is exactly "
@@ -145,7 +145,8 @@ def compute_weights(args, dipoles, charges,
             return fitutils.compute_weights_two_model(
                         charges, dipoles,
                         scalar_kernel_sparse, scalar_kernel_transformed,
-                        tensor_kernel_sparse, tensor_kernel_transformed)
+                        tensor_kernel_sparse, tensor_kernel_transformed,
+                        regularizer)
     elif args.charge_mode == 'lagrange':
         if args.tensor_weight != 0:
             raise ValueError("Charge constraints not yet implemented together "

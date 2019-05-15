@@ -16,14 +16,23 @@ def make_reg_vector(dipole_sigma, charge_sigma, n_train):
     numpy also stores all the zeroes -- even for diagonal matrices)
     """
     reg_matrix = np.empty((n_train, 4))
-    reg_matrix_inv = np.empty((n_train, 4))
     reg_matrix[:, 0] = charge_sigma**2
-    reg_matrix_inv[:, 0] = charge_sigma**-2
     reg_matrix[:, 1:] = dipole_sigma**2
-    reg_matrix_inv[:, 1:] = dipole_sigma**-2
     reg_matrix = reg_matrix.reshape(-1)
+    return reg_matrix
+
+
+def make_inv_reg_vector(dipole_sigma, charge_sigma, n_train):
+    """Compute the diagonal of the regularization matrix.
+
+    (much more space-efficient than computing the whole matrix, because
+    numpy also stores all the zeroes -- even for diagonal matrices)
+    """
+    reg_matrix_inv = np.empty((n_train, 4))
+    reg_matrix_inv[:, 0] = charge_sigma**-2
+    reg_matrix_inv[:, 1:] = dipole_sigma**-2
     reg_matrix_inv = reg_matrix_inv.reshape(-1)
-    return reg_matrix, reg_matrix_inv
+    return reg_matrix_inv
 
 
 def merge_charges_dipoles(charges, dipoles):
@@ -105,7 +114,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     if charges_included:
         data_test = merge_charges_dipoles(charges_test, dipoles_test)
     else:
-        data_test = dipoles_test
+        data_test = np.flatten(dipoles_test)
     n_test = len(natoms_test)
     natoms_test = np.array(natoms_test)
     predicted = sum(
@@ -118,14 +127,14 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         charge_residuals, dipole_residuals = split_charges_dipoles(residuals)
         residuals_out['charge_residuals'] = charge_residuals
     else:
-        dipole_residuals = residuals
+        dipole_residuals = residuals.reshape(n_test, 3)
     residuals_out['dipole_residuals'] = dipole_residuals
     if return_rmse:
         dipole_rmse = np.sqrt(np.sum((dipole_residuals / natoms_test)**2)
                               / n_test)
         residuals_out['dipole_rmse'] = dipole_rmse
         #TODO(max) -- should this be per-atom?
-        dipole_std = np.std(dipoles_test / natoms_test)
+        dipole_std = np.sqrt(np.sum((dipoles_test / natoms_test)**2) / n_test)
         residuals_out['dipole_frac'] = dipole_rmse / dipole_std
         if charges_included:
             charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
@@ -191,8 +200,7 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
     """Compute the weights to fit the given data (dipoles only)
 
     Parameters:
-        dipoles_train       Training data: Dipoles (one per molecule,
-                            flattened)
+        dipoles_train       Training data: Dipoles (one row per molecule)
         kernel_sparse       Covariance between the sparse environments
                             of the scalar model
         kernel_transformed  Covariance between the molecular dipoles and
@@ -212,7 +220,7 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
     weights = np.linalg.solve(
         kernel_sparse
         + (kernel_transformed.T * reg_matrix_inv_diag).dot(kernel_transformed),
-        kenel_transformed.T.dot(dipoles_train * reg_matrix_inv_diag))
+        kenel_transformed.T.dot(dipoles_train.flat * reg_matrix_inv_diag))
 
 
 def compute_weights_charges(charges_train, dipoles_train,
@@ -222,7 +230,7 @@ def compute_weights_charges(charges_train, dipoles_train,
 
     Parameters:
         charges_train       Training data: Charges (one per molecule)
-        dipoles_train       Training data: Dipoles (") (flattened)
+        dipoles_train       Training data: Dipoles (one row per molecule)
         scalar_kernel_sparse
                             Covariance between the sparse environments
                             of the scalar model
@@ -269,7 +277,7 @@ def compute_weights_charge_constrained(
 
     Parameters:
         charges_train       Training data: Charges (one per molecule)
-        dipoles_train       Training data: Dipoles (") (flattened)
+        dipoles_train       Training data: Dipoles (one row per molecule)
         molecules_train     List of ASE Atoms objects containing the atomic
                             coordinates of the molecules in the training set
         scalar_kernel_sparse
@@ -299,7 +307,7 @@ def compute_weights_charge_constrained(
         [[kernel_block,       cov_matrix_charges.T],
          [cov_matrix_charges, np.zeros((n_charges, n_charges))]])
     rhs = np.concatenate(
-        (cov_matrix_dipoles.T.dot(dipoles_train * reg_matrix_inv_diag),
+        (cov_matrix_dipoles.T.dot(dipoles_train.flat * reg_matrix_inv_diag),
          (charges_train)))
     results = np.linalg.solve(lhs_matrix, rhs)
     weights = results[:sparse_cov_matrix.shape[0]]
@@ -320,7 +328,7 @@ def compute_weights_two_model(charges_train, dipoles_train,
 
     Parameters:
         charges_train       Training data: Charges (one per molecule)
-        dipoles_train       Training data: Dipoles (") (flattened)
+        dipoles_train       Training data: Dipoles (one row per molecule)
         molecules_train     List of ASE Atoms objects containing the atomic
                             coordinates of the molecules in the training set
         reg_matrix_inv_diag Diagonal of the inverse regularization matrix
