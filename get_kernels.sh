@@ -68,4 +68,4 @@ else
 fi
 
 # Convert spherical kernels to vector kernels
-python spherical_to_cartesian_kernel.py
+spherical_to_cartesian_kernel.py
