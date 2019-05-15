@@ -69,3 +69,5 @@ fi
 
 # Convert spherical kernels to vector kernels
 spherical_to_cartesian_kernel.py
+
+mv K1_*.npy PS_files
