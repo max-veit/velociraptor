@@ -108,10 +108,11 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         data_test = dipoles_test
     n_test = len(natoms_test)
     natoms_test = np.array(natoms_test)
-    predicted = weights.dot(kernel_matrix)
-    if (weights_second is not None):
-        predicted += weights_second + 
-    residuals = weights.dot(kernel_matrix) - data_test
+    predicted = sum(
+        (weights_one.dot(kernel_one)
+         for weights_one, kernel_one in zip(weights, kernel_matrix)),
+        np.zeros_like(data_test))
+    residuals = predicted - data_test
     residuals_out = dict()
     if charges_included:
         charge_residuals, dipole_residuals = split_charges_dipoles(residuals)

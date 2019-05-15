@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Script to automate the process of fitting a model"""
 
 
@@ -15,17 +16,17 @@ logger = logging.getLogger(__name__)
 
 
 parser = argparse.ArgumentParser(
-    description="Fit a model for the given set of dipoles")
-parser.add_argument('geometries', help="Geometries of the molecules in the "
-    "fit; should be the name of a file readable by ASE.")
-parser.add_argument('dipoles', help="Dipoles, in Cartesian coordinates, "
-    "per geometry.  Entries must be in the same order as the geometry file.")
-parser.epilog("Charges are assumed to sum to zero for each geometry, unless "
+    description="Fit a model for the given set of dipoles",
+    epilog="Charges are assumed to sum to zero for each geometry, unless "
     "the geometries have a property (info entry, in ASE terminology) named "
     "'total_charge'.\n\n"
     "Setting either of the (scalar or tensor) weights to zero will turn "
     "off that component completely and the corresponding kernel file(s) "
     "will not be read.")
+parser.add_argument('geometries', help="Geometries of the molecules in the "
+    "fit; should be the name of a file readable by ASE.")
+parser.add_argument('dipoles', help="Dipoles, in Cartesian coordinates, "
+    "per geometry.  Entries must be in the same order as the geometry file.")
 parser.add_argument('scalar_kernel_sparse', help="Filename for the "
     "sparse-sparse (MM) scalar kernel, in atomic environment space")
 parser.add_argument('scalar_kernel', help="Filename for the full-sparse "
@@ -36,18 +37,21 @@ parser.add_argument('tensor_kernel', help="Filename for the "
     "full-sparse tensor kernel, mapping Cartesian components to environments")
 parser.add_argument('weights_output', help="Name of a file into which to "
      "write the output weights")
-parser.add_argument('-ws', '--scalar-weight', type=float, help="Weight of "
-    "the scalar component (charges) in the model", required=True)
-parser.add_argument('-wt', '--tensor-weight', type=float, help="Weight of "
-    "the tensor component (point dipoles) in the model", required=True)
+parser.add_argument('-ws', '--scalar-weight', type=float, metavar='weight',
+    help="Weight of the scalar component (charges) in the model",
+    required=True)
+parser.add_argument('-wt', '--tensor-weight', type=float, metavar='weight',
+    help="Weight of the tensor component (point dipoles) in the model",
+    required=True)
 parser.add_argument('-rc', '--charge-regularization', type=float, default=1.0,
-                    help="Regularization coefficient (sigma) for total charges")
-parser.add_argument('-rd', '--dipole-regularization', type=float, required=True,
-                    help="Regularization coefficient (sigma) for "
-                         "dipole components")
+                    metavar='sigma2_q', help="Regularization coefficient "
+                    "(sigma^2) for total charges")
+parser.add_argument('-rd', '--dipole-regularization', type=float,
+                    required=True, metavar='sigma2_mu', help="Regularization "
+                    "coefficient (sigma^2) for dipole components")
 parser.add_argument('-sj', '--sparse-jitter', type=float, default=1E-8,
                     help="Small positive constant to ensure positive "
-                    "definiteness of the kernel matrix
+                    "definiteness of the kernel matrix")
 parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
                     help="How to control the total charge of each geometry. "
                     "Choices are 'none' (just fit dipoles), 'fit', (fit "
@@ -56,10 +60,10 @@ parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
                     default='fit')
 parser.add_argument('-pr', '--print-residuals', action='store_true',
                     help="Print the RMSE residuals of the model evaluated on "
-                    "its own training data?")
-parser.add_argument('-wr', '--write-residuals', help="File in which to write "
-                    "the individual (non-RMSd) residuals.  If not given, "
-                    "these will not be written.")
+                    "its own training data")
+parser.add_argument('-wr', '--write-residuals', metavar='FILE',
+                    help="File in which to write the individual (non-RMSd) "
+                    "residuals.  If not given, these will not be written.")
 
 
 def load_kernels(args):
@@ -162,7 +166,7 @@ def compute_own_residuals(
         charges_test = None
     if args.tensor_weight == 0:
         kernels = scalar_kernel_transformed
-    elif args.scalar_weight = 0:
+    elif args.scalar_weight == 0:
         kernels = tensor_kernel_transformed
     else:
         kernels = [scalar_kernel_transformed, tensor_kernel_transformed]
