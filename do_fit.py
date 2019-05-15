@@ -62,7 +62,7 @@ parser.add_argument('-pr', '--print-residuals', action='store_true',
                     help="Print the RMSE residuals of the model evaluated on "
                     "its own training data")
 parser.add_argument('-wr', '--write-residuals', metavar='FILE',
-                    help="File in which to write the individual (non-RMSd) "
+                    help="File in which to write the individual (non-RMSed) "
                     "residuals.  If not given, these will not be written.")
 
 
@@ -190,11 +190,11 @@ def compute_own_residuals(
 if __name__ == "__main__":
     args = parser.parse_args(sys.argv)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
-     tensor_kernel_sparse, tensor_kenel_full_sparse) = load_kernels(args)
+     tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
     geometries = ase.io.read(args.geometries)
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
-        scalar_kernel_full_sparse, tensor_kenel_full_sparse)
+        scalar_kernel_full_sparse, tensor_kernel_full_sparse)
     #TODO(max) do this before the transform to save time and memory
     if args.num_training_geometries > 0:
         n_train = args.num_training_geometries
