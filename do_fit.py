@@ -49,9 +49,9 @@ parser.add_argument('-rc', '--charge-regularization', type=float, default=1.0,
 parser.add_argument('-rd', '--dipole-regularization', type=float,
                     required=True, metavar='sigma2_mu', help="Regularization "
                     "coefficient (sigma^2) for dipole components")
-parser.add_argument('-sj', '--sparse-jitter', type=float, default=1E-8,
-                    help="Small positive constant to ensure positive "
-                    "definiteness of the kernel matrix")
+parser.add_argument('-nt', '--num-training-geometries', type=int,
+                    metavar='<n>', default=-1,
+                    help="Keep only the first <n> geometries for training.")
 parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
                     help="How to control the total charge of each geometry. "
                     "Choices are 'none' (just fit dipoles), 'fit', (fit "
@@ -67,6 +67,7 @@ parser.add_argument('-wr', '--write-residuals', metavar='FILE',
 
 
 def load_kernels(args):
+    """Load the kernels from files and multiply by user-defined weights"""
     if args.scalar_weight != 0:
         scalar_kernel_sparse = np.load(args.scalar_kernel_sparse)
         scalar_kernel = np.load(args.scalar_kernel)
@@ -189,10 +190,17 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
      tensor_kernel_sparse, tensor_kenel_full_sparse) = load_kernels(args)
-    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
-        scalar_kernel_full_sparse, tensor_kenel_full_sparse)
     geometries = ase.io.read(args.geometries)
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
+    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+        scalar_kernel_full_sparse, tensor_kenel_full_sparse)
+    #TODO(max) do this before the transform to save time and memory
+    if args.num_training_geometries > 0:
+        n_train = args.num_training_geometries
+        scalar_kernel_transformed = scalar_kernel_transformed[:n_train]
+        tensor_kernel_transformed = tensor_kernel_transformed[:n_train]
+    else:
+        n_train = len(geometries)
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     weights = compute_weights(
