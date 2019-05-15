@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Script to automate the process of fitting a model"""
 
 
@@ -6,6 +7,8 @@ import logging
 import sys
 
 import ase
+import ase.io
+import numpy as np
 
 import fitutils
 import transform
@@ -15,17 +18,17 @@ logger = logging.getLogger(__name__)
 
 
 parser = argparse.ArgumentParser(
-    description="Fit a model for the given set of dipoles")
-parser.add_argument('geometries', help="Geometries of the molecules in the "
-    "fit; should be the name of a file readable by ASE.")
-parser.add_argument('dipoles', help="Dipoles, in Cartesian coordinates, "
-    "per geometry.  Entries must be in the same order as the geometry file.")
-parser.epilog("Charges are assumed to sum to zero for each geometry, unless "
+    description="Fit a model for the given set of dipoles",
+    epilog="Charges are assumed to sum to zero for each geometry, unless "
     "the geometries have a property (info entry, in ASE terminology) named "
     "'total_charge'.\n\n"
     "Setting either of the (scalar or tensor) weights to zero will turn "
     "off that component completely and the corresponding kernel file(s) "
     "will not be read.")
+parser.add_argument('geometries', help="Geometries of the molecules in the "
+    "fit; should be the name of a file readable by ASE.")
+parser.add_argument('dipoles', help="Dipoles, in Cartesian coordinates, "
+    "per geometry.  Entries must be in the same order as the geometry file.")
 parser.add_argument('scalar_kernel_sparse', help="Filename for the "
     "sparse-sparse (MM) scalar kernel, in atomic environment space")
 parser.add_argument('scalar_kernel', help="Filename for the full-sparse "
@@ -36,18 +39,21 @@ parser.add_argument('tensor_kernel', help="Filename for the "
     "full-sparse tensor kernel, mapping Cartesian components to environments")
 parser.add_argument('weights_output', help="Name of a file into which to "
      "write the output weights")
-parser.add_argument('-ws', '--scalar-weight', type=float, help="Weight of "
-    "the scalar component (charges) in the model", required=True)
-parser.add_argument('-wt', '--tensor-weight', type=float, help="Weight of "
-    "the tensor component (point dipoles) in the model", required=True)
+parser.add_argument('-ws', '--scalar-weight', type=float, metavar='weight',
+    help="Weight of the scalar component (charges) in the model",
+    required=True)
+parser.add_argument('-wt', '--tensor-weight', type=float, metavar='weight',
+    help="Weight of the tensor component (point dipoles) in the model",
+    required=True)
 parser.add_argument('-rc', '--charge-regularization', type=float, default=1.0,
-                    help="Regularization coefficient (sigma) for total charges")
-parser.add_argument('-rd', '--dipole-regularization', type=float, required=True,
-                    help="Regularization coefficient (sigma) for "
-                         "dipole components")
-parser.add_argument('-sj', '--sparse-jitter', type=float, default=1E-8,
-                    help="Small positive constant to ensure positive "
-                    "definiteness of the kernel matrix
+                    metavar='sigma_q', help="Regularization coefficient "
+                    "(sigma) for total charges")
+parser.add_argument('-rd', '--dipole-regularization', type=float,
+                    required=True, metavar='sigma_mu', help="Regularization "
+                    "coefficient (sigma) for dipole components")
+parser.add_argument('-nt', '--num-training-geometries', type=int,
+                    metavar='<n>', default=-1,
+                    help="Keep only the first <n> geometries for training.")
 parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
                     help="How to control the total charge of each geometry. "
                     "Choices are 'none' (just fit dipoles), 'fit', (fit "
@@ -56,13 +62,14 @@ parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
                     default='fit')
 parser.add_argument('-pr', '--print-residuals', action='store_true',
                     help="Print the RMSE residuals of the model evaluated on "
-                    "its own training data?")
-parser.add_argument('-wr', '--write-residuals', help="File in which to write "
-                    "the individual (non-RMSd) residuals.  If not given, "
-                    "these will not be written.")
+                    "its own training data")
+parser.add_argument('-wr', '--write-residuals', metavar='FILE',
+                    help="File in which to write the individual (non-RMSed) "
+                    "residuals.  If not given, these will not be written.")
 
 
 def load_kernels(args):
+    """Load the kernels from files and multiply by user-defined weights"""
     if args.scalar_weight != 0:
         scalar_kernel_sparse = np.load(args.scalar_kernel_sparse)
         scalar_kernel = np.load(args.scalar_kernel)
@@ -107,11 +114,11 @@ def compute_weights(args, dipoles, charges,
                                       and (args.tensor_weight != 0)):
         raise ValueError("Combined fitting only works with 'fit' charge-mode")
     if args.charge_mode == 'none':
-        regularizer = args.charge_regularization * np.ones(len(charges))
+        regularizer = args.dipole_regularization * np.ones((dipoles.size,))
     else:
-        regularizer = fitutils.make_reg_vector(args.charge_regularization,
-                                               args.dipole_regularization,
-                                               len(charges))
+        regularizer = fitutils.make_inv_reg_vector(args.charge_regularization,
+                                                   args.dipole_regularization,
+                                                   len(charges))
     if args.charge_mode == 'none':
         if args.tensor_weight == 0:
             return fitutils.compute_weights(
@@ -128,7 +135,7 @@ def compute_weights(args, dipoles, charges,
             return fitutils.compute_weights_charges(
                     charges, dipoles,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    reg_matrix_inv_diag)
+                    regularizer)
         elif args.scalar_weight == 0:
             logger.warn("Doing tensor kernel fitting with charges; since l=1 "
                         "kernels are insensitive to scalars, this is exactly "
@@ -140,7 +147,8 @@ def compute_weights(args, dipoles, charges,
             return fitutils.compute_weights_two_model(
                         charges, dipoles,
                         scalar_kernel_sparse, scalar_kernel_transformed,
-                        tensor_kernel_sparse, tensor_kernel_transformed)
+                        tensor_kernel_sparse, tensor_kernel_transformed,
+                        regularizer)
     elif args.charge_mode == 'lagrange':
         if args.tensor_weight != 0:
             raise ValueError("Charge constraints not yet implemented together "
@@ -162,7 +170,7 @@ def compute_own_residuals(
         charges_test = None
     if args.tensor_weight == 0:
         kernels = scalar_kernel_transformed
-    elif args.scalar_weight = 0:
+    elif args.scalar_weight == 0:
         kernels = tensor_kernel_transformed
     else:
         kernels = [scalar_kernel_transformed, tensor_kernel_transformed]
@@ -182,13 +190,20 @@ def compute_own_residuals(
 
 
 if __name__ == "__main__":
-    args = parser.parse_args(sys.argv)
+    args = parser.parse_args()
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
-     tensor_kernel_sparse, tensor_kenel_full_sparse) = load_kernels(args)
-    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
-        scalar_kernel_full_sparse, tensor_kenel_full_sparse)
-    geometries = ase.io.read(args.geometries)
+     tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
+    geometries = ase.io.read(args.geometries, ':')
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
+    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+        geometries, scalar_kernel_full_sparse, tensor_kernel_full_sparse)
+    #TODO(max) do this before the transform to save time and memory
+    if args.num_training_geometries > 0:
+        n_train = args.num_training_geometries
+        scalar_kernel_transformed = scalar_kernel_transformed[:n_train]
+        tensor_kernel_transformed = tensor_kernel_transformed[:n_train]
+    else:
+        n_train = len(geometries)
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     weights = compute_weights(
