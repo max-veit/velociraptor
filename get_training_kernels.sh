@@ -73,3 +73,28 @@ spherical_to_cartesian_kernel.py -k K1_NM.npy -o Kvec_NM.npy
 spherical_to_cartesian_kernel.py -k K1_MM.npy -o Kvec_MM.npy
 
 mv K1_*.npy PS_files
+
+# Print out hyperparameters
+ofile=kernel_hyperparameters.txt
+echo  "Kernel hyperparameters"                 >  ${ofile}
+echo  "======================"                 >> ${ofile}
+echo                                           >> ${ofile}
+echo  "Power Spectrum building:"               >> ${ofile}
+echo  "nmax = 8"                               >> ${ofile}
+echo  "lmax = 6"                               >> ${ofile}
+echo  "radial cutoff = "${rcut}                >> ${ofile}
+echo  "sigma = 0.3"                            >> ${ofile}
+echo  "Chemical species = H C N O S Cl"        >> ${ofile}
+echo  "Number of features kept (L=0) = "${nc0} >> ${ofile}
+echo  "Number of features kept (L=1) = "${nc1} >> ${ofile}
+if [ ${ne} != -1 ];then
+ echo "Same environments used for both"        >> ${ofile}
+ echo "Number of environments = "${ne}         >> ${ofile}
+else
+ echo "Different environments used"            >> ${ofile}
+ echo "Number of environments (L=0) = "${ne0}  >> ${ofile}
+ echo "Number of environments (L=1) = "${ne1}  >> ${ofile}
+fi
+echo                                           >> ${ofile}
+echo "Kernel building:"                        >> ${ofile}
+echo "zeta = 2"                                >> ${ofile}
