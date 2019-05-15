@@ -17,12 +17,16 @@ get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 0 -sf PS_f
 # Get L=1 power spectrum
 get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 1 -sf PS_files/PS1_qm7b -f ${fname} -o prediction_files/PS1_pred
 
+# Get atomic power spectra
+get_atomic_power_spectrum.py -lm 0 -p prediction_files/PS0_pred.npy -o prediction_files/PS0_pred_atomic -f ${fname}
+get_atomic_power_spectrum.py -lm 1 -p prediction_files/PS1_pred.npy -o prediction_files/PS1_pred_atomic -f ${fname}
+
 # Get prediction kernels
 # L=0 kernel
-get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy prediction_files/PS0_pred.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy prediction_files/PS0_pred.npy -s NONE prediction_files/PS0_pred_natoms.npy -o K0_TT
+get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -s NONE NONE -o K0_TT
 
 # L=1 kernel
-get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy prediction_files/PS1_pred.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy prediction_files/PS0_pred.npy -s NONE prediction_files/PS1_pred_natoms.npy -o K1_TT
+get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy prediction_files/PS1_pred_atomic.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -s NONE NONE -o K1_TT
 
 # Convert spherical kernel to vector kernel
 spherical_to_cartesian_kernel.py -k K1_TT.npy -o Kvec_TT.npy
