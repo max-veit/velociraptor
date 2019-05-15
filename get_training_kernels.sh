@@ -14,6 +14,7 @@ for arg in $(seq 1 $#);do
  elif [ "${!arg}" == "-nc1" ];then arg1=$((arg+1));nc1=${!arg1}
  elif [ "${!arg}" == "-ne0" ];then arg1=$((arg+1));ne0=${!arg1}
  elif [ "${!arg}" == "-ne1" ];then arg1=$((arg+1));ne1=${!arg1}
+ elif [ "${!arg}" == "-ns" ];then arg1=$((arg+1));ns=${!arg1}
  elif [ "${!arg}" == "-ne" ];then arg1=$((arg+1));ne=${!arg1}     # Specify this one if we want to use the same environments for both
  fi
 done
@@ -68,6 +69,7 @@ else
 fi
 
 # Convert spherical kernels to vector kernels
-spherical_to_cartesian_kernel.py
+spherical_to_cartesian_kernel.py -k K1_NM.npy -o Kvec_NM.npy
+spherical_to_cartesian_kernel.py -k K1_MM.npy -o Kvec_MM.npy
 
 mv K1_*.npy PS_files
