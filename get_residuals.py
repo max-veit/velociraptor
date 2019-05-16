@@ -6,6 +6,7 @@ import argparse
 import logging
 
 import ase
+import numpy as np
 
 import do_fit
 import fitutils
@@ -66,14 +67,15 @@ if __name__ == "__main__":
         raise ValueError("You don't want to print or write residuals, so "
                          "there's nothing for me to do.")
     scalar_kernel, tensor_kernel = load_kernels(args)
-    geometries = ase.io.read(args.geometries)
+    geometries = ase.io.read(args.geometries, ':')
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     (scalar_kernel_transformed,
      tensor_kernel_transformed) = do_fit.transform_kernels(
-                                            scalar_kernel, tensor_kernel)
+                                geometries, scalar_kernel.T, tensor_kernel.T)
     charges = do_fit.get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     weights = np.load(args.weights)
+    args.charge_mode = 'fit'
     do_fit.compute_own_residuals(args, weights, dipoles, charges, natoms_list,
                                  scalar_kernel_transformed,
                                  tensor_kernel_transformed)

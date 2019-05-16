@@ -44,7 +44,7 @@ def merge_charges_dipoles(charges, dipoles):
     (for dipoles) the Cartesian axis.
     """
     n_train = len(charges)
-    charges_dipoles = np.concatenate((charges, dipoles), axis=1)
+    charges_dipoles = np.concatenate((charges[:, np.newaxis], dipoles), axis=1)
     return charges_dipoles.reshape(n_train*4)
 
 
@@ -55,7 +55,7 @@ def split_charges_dipoles(charges_dipoles):
 
     This is effectively the inverse of merge_charges_dipoles().
     """
-    n_train = charges_dipoles.size / 4
+    n_train = int(charges_dipoles.size / 4)
     charges_dipoles = charges_dipoles.reshape((n_train, 4))
     return charges_dipoles[:,0], charges_dipoles[:, 1:4]
 
@@ -103,7 +103,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     charges_included = (charges_test is not None)
     if hasattr(weights, 'shape') and len(weights.shape) == 1:
         # Assume we've been given arrays, not lists of arrays
-        if hasattr(kernel_matrix) and len(kernel_matrix.shape) != 2:
+        if hasattr(kernel_matrix, 'shape') and len(kernel_matrix.shape) != 2:
             raise ValueError("Confused about whether you're trying to specify "
                              "one set or multiple sets of weights and kernel")
         weights = [weights]
@@ -118,7 +118,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     n_test = len(natoms_test)
     natoms_test = np.array(natoms_test)
     predicted = sum(
-        (weights_one.dot(kernel_one)
+        (weights_one.dot(kernel_one.T)
          for weights_one, kernel_one in zip(weights, kernel_matrix)),
         np.zeros_like(data_test))
     residuals = predicted - data_test
@@ -130,11 +130,11 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         dipole_residuals = residuals.reshape(n_test, 3)
     residuals_out['dipole_residuals'] = dipole_residuals
     if return_rmse:
-        dipole_rmse = np.sqrt(np.sum((dipole_residuals / natoms_test)**2)
+        dipole_rmse = np.sqrt(np.sum((dipole_residuals.T / natoms_test)**2)
                               / n_test)
         residuals_out['dipole_rmse'] = dipole_rmse
         #TODO(max) -- should this be per-atom?
-        dipole_std = np.sqrt(np.sum((dipoles_test / natoms_test)**2) / n_test)
+        dipole_std = np.sqrt(np.sum((dipoles_test.T / natoms_test)**2) / n_test)
         residuals_out['dipole_frac'] = dipole_rmse / dipole_std
         if charges_included:
             charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
@@ -254,7 +254,7 @@ def compute_weights_charges(charges_train, dipoles_train,
         scalar_kernel_sparse
         + (scalar_kernel_transformed.T * reg_matrix_inv_diag).dot(
             scalar_kernel_transformed),
-        scalar_kenel_transformed.T.dot(
+        scalar_kernel_transformed.T.dot(
             charges_dipoles_train * reg_matrix_inv_diag))
     return weights
 

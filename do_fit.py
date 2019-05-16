@@ -121,6 +121,8 @@ def compute_weights(args, dipoles, charges,
                                                    len(charges))
     if args.charge_mode == 'none':
         if args.tensor_weight == 0:
+            scalar_kernel_transformed = np.delete(scalar_kernel_transformed,
+                np.arange(0, scalar_kernel_transformed.shape[0], 4), axis=0)
             return fitutils.compute_weights(
                     dipoles, scalar_kernel_sparse,
                     scalar_kernel_transformed, regularizer)
@@ -176,14 +178,14 @@ def compute_own_residuals(
         kernels = [scalar_kernel_transformed, tensor_kernel_transformed]
         weights = np.split(weights,
                            np.array([scalar_kernel_transformed.shape[1]]))
-    residuals = compute_residuals(
+    residuals = fitutils.compute_residuals(
         weights, kernels, dipoles, natoms_list,
         charges_test=charges_test, return_rmse=args.print_residuals)
     if 'dipole_rmse' in residuals:
-        print("Dipole RMSE: {.10f} : {.10f} of intrinsic variation".format(
+        print("Dipole RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
             residuals['dipole_rmse'], residuals['dipole_frac']))
     if 'charge_rmse' in residuals:
-        print("Charge RMSE: {.10f} : {.10f} of intrinsic variation".format(
+        print("Charge RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
             residuals['charge_rmse'], residuals['charge_frac']))
     if args.write_residuals is not None:
         np.savez(args.write_residuals, **residuals)
@@ -198,14 +200,17 @@ if __name__ == "__main__":
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
         geometries, scalar_kernel_full_sparse, tensor_kernel_full_sparse)
     #TODO(max) do this before the transform to save time and memory
-    if args.num_training_geometries > 0:
-        n_train = args.num_training_geometries
-        scalar_kernel_transformed = scalar_kernel_transformed[:n_train]
-        tensor_kernel_transformed = tensor_kernel_transformed[:n_train]
-    else:
-        n_train = len(geometries)
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
+    if args.num_training_geometries > 0:
+        n_train = args.num_training_geometries
+        scalar_kernel_transformed = scalar_kernel_transformed[:4*n_train]
+        tensor_kernel_transformed = tensor_kernel_transformed[:4*n_train]
+        charges = charges[:n_train]
+        dipoles = dipoles[:n_train]
+        natoms_list = natoms_list[:n_train]
+    else:
+        n_train = len(geometries)
     weights = compute_weights(
         args, dipoles, charges,
         scalar_kernel_transformed, tensor_kernel_transformed)
