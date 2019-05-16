@@ -75,7 +75,7 @@ spherical_to_cartesian_kernel.py -k K1_MM.npy -o Kvec_MM.npy
 mv K1_*.npy PS_files
 
 # Print out hyperparameters
-ofile=kernel_hyperparameters.txt
+ofile=PS_files/kernel_hyperparameters.txt
 echo  "Kernel hyperparameters"                 >  ${ofile}
 echo  "======================"                 >> ${ofile}
 echo                                           >> ${ofile}
