@@ -32,3 +32,5 @@ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic_sparse.npy prediction_fil
 
 # Convert spherical kernel to vector kernel
 spherical_to_cartesian_kernel.py -k K1_${suffix}.npy -o Kvec_${suffix}.npy
+
+mv K1_${suffix}.npy prediction_files_${suffix}
