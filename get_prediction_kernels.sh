@@ -1,11 +1,13 @@
 #!/bin/bash
 
 fname=showcase_dipoles.xyz   # File name of set whose properties we want to predict
-rcut=4.0                 # Radial cutoff
+rcut=4.0                     # Radial cutoff
+suffix=TT                    # Suffix for kernel output files
 
 for arg in $(seq 1 $#);do
  if [ "${!arg}" == "-rc" ];then arg1=$((arg+1));rcut=${!arg1}
  elif [ "${!arg}" == "-f" ];then arg1=$((arg+1));fname=${!arg1}
+ elif [ "${!arg}" == "-s" ];then arg1=$((arg+1));suffix=${!arg1}
  fi
 done
 
@@ -23,10 +25,10 @@ get_atomic_power_spectrum.py -lm 1 -p prediction_files/PS1_pred.npy -o predictio
 
 # Get prediction kernels
 # L=0 kernel
-get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -ps0 PS_files/PS0_train_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -s NONE NONE -o K0_TT
+get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -ps0 PS_files/PS0_train_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -s NONE NONE -o K0_${suffix}
 
 # L=1 kernel
-get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic_sparse.npy prediction_files/PS1_pred_atomic.npy -ps0 PS_files/PS0_train_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -s NONE NONE -o K1_TT
+get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic_sparse.npy prediction_files/PS1_pred_atomic.npy -ps0 PS_files/PS0_train_atomic_sparse.npy prediction_files/PS0_pred_atomic.npy -s NONE NONE -o K1_${suffix}
 
 # Convert spherical kernel to vector kernel
 spherical_to_cartesian_kernel.py -k K1_TT.npy -o Kvec_TT.npy
