@@ -22,50 +22,50 @@ done
 mkdir PS_files
 
 # Get L=0 power spectrum
-get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 0 -nc ${nc0} -f qm7b.xyz -o PS_files/PS0_qm7b
+get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 0 -nc ${nc0} -f train.xyz -o PS_files/PS0_train
 
 # Get L=1 power spectrum
-get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 1 -nc ${nc1} -f qm7b.xyz -o PS_files/PS1_qm7b -ns ${ns}
-get_power_spectrum.py -rc 4.0 -c H C N O S Cl -s H C N O S Cl -lm 1 -f qm7b.xyz -sf PS_files/PS1_qm7b -o PS_files/PS1_qm7b
+get_power_spectrum.py -rc ${rcut} -c H C N O S Cl -s H C N O S Cl -lm 1 -nc ${nc1} -f train.xyz -o PS_files/PS1_train -ns ${ns}
+get_power_spectrum.py -rc 4.0 -c H C N O S Cl -s H C N O S Cl -lm 1 -f train.xyz -sf PS_files/PS1_train -o PS_files/PS1_train
 
 # Find atomic power spectra and sparsify on environments
-get_atomic_power_spectrum.py -lm 0 -p PS_files/PS0_qm7b.npy -o PS_files/PS0_qm7b_atomic -f qm7b.xyz
-get_atomic_power_spectrum.py -lm 1 -p PS_files/PS1_qm7b.npy -o PS_files/PS1_qm7b_atomic -f qm7b.xyz
+get_atomic_power_spectrum.py -lm 0 -p PS_files/PS0_train.npy -o PS_files/PS0_train_atomic -f train.xyz
+get_atomic_power_spectrum.py -lm 1 -p PS_files/PS1_train.npy -o PS_files/PS1_train_atomic -f train.xyz
 if [ ${ne} != -1 ];then
  # We want to use the same environments to sparsify on the L=0 and L=1
  # First get sparsification details
- do_fps.py -p PS_files/PS0_qm7b_atomic.npy -n ${ne} -o PS_files/PS0_envs
+ do_fps.py -p PS_files/PS0_train_atomic.npy -n ${ne} -o PS_files/PS0_envs
  # Apply sparsification
- apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_qm7b_atomic_sparse
- apply_fps.py -p PS_files/PS1_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS1_qm7b_atomic_sparse
+ apply_fps.py -p PS_files/PS0_train_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_train_atomic_sparse
+ apply_fps.py -p PS_files/PS1_train_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS1_train_atomic_sparse
 else
  # We want to use different environments
  # First get sparsification details
- do_fps.py -p PS_files/PS0_qm7b_atomic.npy -n ${ne0} -o PS_files/PS0_envs
- do_fps.py -p PS_files/PS1_qm7b_atomic.npy -n ${ne1} -o PS_files/PS1_envs
+ do_fps.py -p PS_files/PS0_train_atomic.npy -n ${ne0} -o PS_files/PS0_envs
+ do_fps.py -p PS_files/PS1_train_atomic.npy -n ${ne1} -o PS_files/PS1_envs
  # Apply sparsification
- apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_qm7b_atomic_sparse
- apply_fps.py -p PS_files/PS1_qm7b_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS1_qm7b_atomic_sparse
- apply_fps.py -p PS_files/PS0_qm7b_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS01_qm7b_atomic_sparse
+ apply_fps.py -p PS_files/PS0_train_atomic.npy -sf PS_files/PS0_envs_rows -o PS_files/PS0_train_atomic_sparse
+ apply_fps.py -p PS_files/PS1_train_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS1_train_atomic_sparse
+ apply_fps.py -p PS_files/PS0_train_atomic.npy -sf PS_files/PS1_envs_rows -o PS_files/PS01_train_atomic_sparse
 fi
 
 # Generate sparsified kernels
 if [ ${ne} != -1 ];then
  # Here we only have two power spectra, because we used the same environments for L=0 and L=1
  # Get L=0 kernel matrices
- get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic.npy PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_NM
- get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_MM
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K0_NM
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K0_MM
  # Get L=1 kernel matrices
- get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS1_qm7b_atomic.npy PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K1_NM
- get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS1_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K1_NM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K1_MM
 else
  # We have three power spectra that must be used to build our sparsifieid kernels
  # Get L=0 kernel matrices
- get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic.npy PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic.npy PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_NM
- get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K0_MM
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K0_NM
+ get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K0_MM
  # Get L=1 kernel matrices
- get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic.npy PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic.npy PS_files/PS01_qm7b_atomic_sparse.npy -s NONE NONE -o K1_NM
- get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_qm7b_atomic_sparse.npy -ps0 PS_files/PS0_qm7b_atomic_sparse.npy -s NONE NONE -o K1_MM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic.npy PS_files/PS1_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic.npy PS_files/PS01_train_atomic_sparse.npy -s NONE NONE -o K1_NM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K1_MM
 fi
 
 # Convert spherical kernels to vector kernels
