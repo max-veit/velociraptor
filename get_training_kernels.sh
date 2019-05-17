@@ -56,7 +56,7 @@ if [ ${ne} != -1 ];then
  get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K0_NM
  get_kernel.py -lm 0 -z 2 -ps PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K0_MM
  # Get L=1 kernel matrices
- get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -ps0 PS_files/PS1_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K1_NM
+ get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic.npy PS_files/PS1_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic.npy PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K1_NM
  get_kernel.py -lm 1 -z 2 -ps PS_files/PS1_train_atomic_sparse.npy -ps0 PS_files/PS0_train_atomic_sparse.npy -s NONE NONE -o K1_MM
 else
  # We have three power spectra that must be used to build our sparsifieid kernels
