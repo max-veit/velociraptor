@@ -66,23 +66,26 @@ parser.add_argument('-pr', '--print-residuals', action='store_true',
 parser.add_argument('-wr', '--write-residuals', metavar='FILE',
                     help="File in which to write the individual (non-RMSed) "
                     "residuals.  If not given, these will not be written.")
+parser.add_argument('-mm', '--memory-map', action='store_true',
+                    help="Memory-map the larger kernels to save memory? (they "
+                    "will still be read in after slicing and transforming)")
 
 
 def load_kernels(args):
-    """Load the kernels from files and multiply by user-defined weights"""
+    """Load the kernels from files"""
+    if args.memory_map:
+        mmap_mode = 'r'
+    else:
+        mmap_mode = None
     if args.scalar_weight != 0:
         scalar_kernel_sparse = np.load(args.scalar_kernel_sparse)
-        scalar_kernel = np.load(args.scalar_kernel)
-        scalar_kernel_sparse *= args.scalar_weight
-        scalar_kernel *= args.scalar_weight
+        scalar_kernel = np.load(args.scalar_kernel, mmap_mode=mmap_mode)
     else:
         scalar_kernel = np.array([])
         scalar_kernel_sparse = np.array([])
     if args.tensor_weight != 0:
         tensor_kernel_sparse = np.load(args.tensor_kernel_sparse)
-        tensor_kernel = np.load(args.tensor_kernel)
-        tensor_kernel_sparse *= args.tensor_weight
-        tensor_kernel *= args.tensor_weight
+        tensor_kernel = np.load(args.tensor_kernel, mmap_mode=mmap_mode)
     else:
         tensor_kernel = np.array([])
         tensor_kernel_sparse = np.array([])
@@ -94,17 +97,41 @@ def get_charges(geometries):
     return np.array([geom.info.get('total_charge', 0.) for geom in geometries])
 
 
-def transform_kernels(geometries, scalar_kernel_full_sparse,
-                                  tensor_kernel_full_sparse):
-    if scalar_kernel_full_sparse.shape[0] != 0:
+def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
+                                  tensor_kernel_full_sparse, tensor_weight):
+    if scalar_weight != 0:
         scalar_kernel_transformed = transform.transform_envts_charge_dipoles(
                 geometries, scalar_kernel_full_sparse)
+        scalar_kernel_transformed *= scalar_weight
     else:
         scalar_kernel_transformed = scalar_kernel_full_sparse
     # Assuming the spherical-to-Cartesian transformation was done elsewhere
-    tensor_kernel_transformed = tensor_kernel_full_sparse
+    if tensor_weight != 0:
+        tensor_kernel_transformed = (
+                transform.transform_vector_envts_charge_dipoles(
+                    geometries, tensor_kernel_full_sparse))
+        tensor_kernel_transformed *= tensor_weight
+
+    else:
+        tensor_kernel_transformed = tensor_kernel_full_sparse
     return scalar_kernel_transformed, tensor_kernel_transformed
 
+
+def transform_sparse_kernels(geometries, scalar_kernel_sparse, scalar_weight,
+                                         tensor_kernel_sparse, tensor_weight):
+    if scalar_weight != 0:
+        scalar_kernel_sparse = scalar_kernel_sparse * scalar_weight
+    if tensor_weight != 0:
+        kernel_shape = tensor_kernel_sparse.shape
+        if kernel_shape[2:] != (3, 3) or kernel_shape[0] != kernel_shape[1]:
+            raise ValueError('Vector kernel has unrecognized shape: {}, was'
+                    'expecting something of the form (n_sparse, n_sparse, '
+                    '3, 3)'.format(kernel_shape))
+        tensor_kernel_sparse = (
+                tensor_kernel_sparse.transpose((0, 2, 1, 3)).reshape(
+                    (kernel_shape[0]*3, kernel_shape[1]*3))
+                * tensor_weight)
+    return scalar_kernel_sparse, tensor_kernel_sparse
 
 def compute_weights(args, dipoles, charges,
                     scalar_kernel_transformed, tensor_kernel_transformed):
@@ -121,8 +148,6 @@ def compute_weights(args, dipoles, charges,
                                                    len(charges))
     if args.charge_mode == 'none':
         if args.tensor_weight == 0:
-            scalar_kernel_transformed = np.delete(scalar_kernel_transformed,
-                np.arange(0, scalar_kernel_transformed.shape[0], 4), axis=0)
             return fitutils.compute_weights(
                     dipoles, scalar_kernel_sparse,
                     scalar_kernel_transformed, regularizer)
@@ -178,9 +203,11 @@ def compute_own_residuals(
         kernels = [scalar_kernel_transformed, tensor_kernel_transformed]
         weights = np.split(weights,
                            np.array([scalar_kernel_transformed.shape[1]]))
+    intrinsic_dipole_std = vars(args).get('intrinsic_variation')
     residuals = fitutils.compute_residuals(
         weights, kernels, dipoles, natoms_list,
-        charges_test=charges_test, return_rmse=args.print_residuals)
+        charges_test=charges_test, return_rmse=args.print_residuals,
+        intrinsic_dipole_std=intrinsic_dipole_std)
     if 'dipole_rmse' in residuals:
         print("Dipole RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
             residuals['dipole_rmse'], residuals['dipole_frac']))
@@ -193,24 +220,34 @@ def compute_own_residuals(
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    (scalar_kernel_sparse, scalar_kernel_full_sparse,
-     tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
-    geometries = ase.io.read(args.geometries, ':')
-    natoms_list = [geom.get_number_of_atoms() for geom in geometries]
-    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
-        geometries, scalar_kernel_full_sparse, tensor_kernel_full_sparse)
-    #TODO(max) do this before the transform to save time and memory
-    charges = get_charges(geometries)
-    dipoles = np.loadtxt(args.dipoles)
     if args.num_training_geometries > 0:
         n_train = args.num_training_geometries
-        scalar_kernel_transformed = scalar_kernel_transformed[:4*n_train]
-        tensor_kernel_transformed = tensor_kernel_transformed[:4*n_train]
-        charges = charges[:n_train]
-        dipoles = dipoles[:n_train]
-        natoms_list = natoms_list[:n_train]
+        geometries = ase.io.read(args.geometries, slice(0, n_train))
     else:
+        geometries = ase.io.read(args.geometries, slice(None))
         n_train = len(geometries)
+    charges = get_charges(geometries)
+    dipoles = np.loadtxt(args.dipoles)[:n_train]
+    natoms_list = [geom.get_number_of_atoms() for geom in geometries]
+    n_descriptors = sum(natoms_list)
+    (scalar_kernel_sparse, scalar_kernel_full_sparse,
+     tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
+    scalar_kernel_full_sparse = scalar_kernel_full_sparse[:n_descriptors]
+    tensor_kernel_full_sparse = tensor_kernel_full_sparse[:n_descriptors]
+    scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
+        geometries, scalar_kernel_sparse, args.scalar_weight,
+                    tensor_kernel_sparse, args.tensor_weight)
+    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+        geometries, scalar_kernel_full_sparse, args.scalar_weight,
+                    tensor_kernel_full_sparse, args.tensor_weight)
+    if args.charge_mode == 'none':
+        scalar_kernel_transformed = np.delete(
+                scalar_kernel_transformed, slice(None, None, 4), axis=0)
+        tensor_kernel_transformed = np.delete(
+                tensor_kernel_transformed, slice(None, None, 4), axis=0)
+    # Close files or free memory for what comes next
+    del scalar_kernel_full_sparse
+    del tensor_kernel_full_sparse
     weights = compute_weights(
         args, dipoles, charges,
         scalar_kernel_transformed, tensor_kernel_transformed)

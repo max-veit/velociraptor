@@ -61,7 +61,8 @@ def split_charges_dipoles(charges_dipoles):
 
 
 def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
-                      charges_test=None, return_rmse=True):
+                      charges_test=None, return_rmse=True,
+                      intrinsic_dipole_std=None):
     """Compute the residuals for the given fit
 
     If the RMSE is requested, return the RMS of the _norm_ of the dipole
@@ -94,6 +95,10 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                     residuals, including as fractions of the intrinsic
                     errors (standard deviations per atom) of the dipoles
                     and charges.
+        intrinsic_dipole_std
+                    Intrinsic variation of the dipole moments to use,
+                    instead of the RMS of the norm of the dipole moments
+                    in 'dipole_test'
 
     Return value is a dictionary of numpy arrays.  Depending on what
     is requested, one or more of the following keys will be present:
@@ -114,7 +119,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     if charges_included:
         data_test = merge_charges_dipoles(charges_test, dipoles_test)
     else:
-        data_test = np.flatten(dipoles_test)
+        data_test = dipoles_test.flatten()
     n_test = len(natoms_test)
     natoms_test = np.array(natoms_test)
     predicted = sum(
@@ -133,16 +138,21 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         dipole_rmse = np.sqrt(np.sum((dipole_residuals.T / natoms_test)**2)
                               / n_test)
         residuals_out['dipole_rmse'] = dipole_rmse
-        #TODO(max) -- should this be per-atom?
-        dipole_std = np.sqrt(np.sum((dipoles_test.T / natoms_test)**2) / n_test)
-        residuals_out['dipole_frac'] = dipole_rmse / dipole_std
+        if intrinsic_dipole_std is None:
+            #TODO(max) -- should this be per-atom?
+            intrinsic_dipole_std = np.sqrt(
+                    np.sum((dipoles_test.T / natoms_test)**2) / n_test)
+        residuals_out['dipole_frac'] = dipole_rmse / intrinsic_dipole_std
         if charges_included:
             charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
                                   / n_test)
             residuals_out['charge_rmse'] = charge_rmse
             #TODO(max) same question
             charge_std = np.std(charges_test / natoms_test)
-            residuals_out['charge_frac'] = charge_rmse / charge_std
+            if charge_std == 0.:
+                residuals_out['charge_frac'] = np.nan
+            else:
+                residuals_out['charge_frac'] = charge_rmse / charge_std
     return residuals_out
 
 
@@ -220,7 +230,8 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
     weights = np.linalg.solve(
         kernel_sparse
         + (kernel_transformed.T * reg_matrix_inv_diag).dot(kernel_transformed),
-        kenel_transformed.T.dot(dipoles_train.flat * reg_matrix_inv_diag))
+        kernel_transformed.T.dot(dipoles_train.flat * reg_matrix_inv_diag))
+    return weights
 
 
 def compute_weights_charges(charges_train, dipoles_train,

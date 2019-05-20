@@ -45,17 +45,20 @@ parser.add_argument('-pr', '--print-residuals', action='store_true',
 parser.add_argument('-wr', '--write-residuals', metavar='FILE',
                     help="File in which to write the individual (non-RMSed) "
                     "residuals.  If not given, these will not be written.")
+parser.add_argument('-iv', '--intrinsic-variation', metavar='sigma_0',
+                    type=float, help="Supply an intrinsic variation to use "
+                    "when normalizing dipole residual RMSEs, instead of the "
+                    "standard deviation of the norm of the dipole vector")
 
 
 def load_kernels(args):
     if args.scalar_weight != 0:
-        scalar_kernel = np.load(args.scalar_kernel)
-        scalar_kernel *= args.scalar_weight
+        # Aargh, the ordering conventions changed
+        scalar_kernel = np.load(args.scalar_kernel).T
     else:
         scalar_kernel = np.array([])
     if args.tensor_weight != 0:
-        tensor_kernel = np.load(args.tensor_kernel)
-        tensor_kernel *= args.tensor_weight
+        tensor_kernel = np.load(args.tensor_kernel).swapaxes(0, 1)
     else:
         tensor_kernel = np.array([])
     return (scalar_kernel, tensor_kernel)
@@ -71,7 +74,8 @@ if __name__ == "__main__":
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     (scalar_kernel_transformed,
      tensor_kernel_transformed) = do_fit.transform_kernels(
-                                geometries, scalar_kernel.T, tensor_kernel.T)
+                                geometries, scalar_kernel, args.scalar_weight,
+                                            tensor_kernel, args.tensor_weight)
     charges = do_fit.get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     weights = np.load(args.weights)

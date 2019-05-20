@@ -66,6 +66,50 @@ def transform_envts_charge_dipoles(molecules, target_matrix):
     return target_transformed
 
 
+def transform_vector_envts_charge_dipoles(molecules, target_matrix):
+    """Transform a matrix of vector environments to charges+dipoles
+
+    This takes a matrix of shape (n_envs, n_sparse, 3, 3), describing
+    the vector components of the kernels between individual atoms, to
+    another matrix of shape (n_molecules*4, n_sparse*3) describing the
+    kernel of the vector components of the _molecular_ dipole with the
+    components of the sparse environments.  Every fourth row (starting
+    with the first row) is zero, since the correlation between an l=1
+    tensor and a scalar (l=0) is zero: Atomic dipoles predict no charges.
+
+    Parameters:
+        molecules       A list of ASE Atoms objects containing the
+                        atomic positions for each configuration
+        target_matrix   The matrix to transform; rows should correspond
+                        to environments (atoms).  The column dimension
+                        is retained in the output (left-multiplication).
+
+    The charges and dipoles are ordered canonically, i.e. for each
+    configuration the total charge first and then the three Cartesian
+    dipole components.
+    """
+    target_shape = target_matrix.shape
+    if target_shape[2:] != (3, 3):
+        raise ValueError('Vector kernel has unrecognized shape: {}'.format(
+                target_shape))
+    if target_matrix.shape[0] != sum(mol.get_number_of_atoms()
+                                     for mol in molecules):
+        raise ValueError("Target matrix must have as many rows as " +
+                         "environments (atoms) in the list of molecules")
+    target_shape_new = (len(molecules)*4, target_shape[1] * 3)
+    target_transformed = np.empty(target_shape_new)
+    environ_idx = 0
+    for mol_idx, molecule in enumerate(molecules):
+        natoms_mol = molecule.get_number_of_atoms()
+        # Charge correlation iz sero
+        target_transformed[4*mol_idx] = 0.
+        molecule_target = target_matrix[environ_idx:environ_idx+natoms_mol]
+        environ_idx += natoms_mol
+        target_transformed[4*mol_idx + 1 : 4*mol_idx + 4] = (
+            molecule_target.sum(axis=0).transpose(1, 0, 2).reshape(3, -1))
+    return target_transformed
+
+
 def transform_charge_dipoles_envts(molecules, target_matrix):
     """Transform a matrix of charges+dipoles back to environments
 
