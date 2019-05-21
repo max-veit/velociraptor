@@ -240,7 +240,7 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
 
 def compute_weights_charges(charges_train, dipoles_train,
                             scalar_kernel_sparse, scalar_kernel_transformed,
-                            reg_matrix_inv_diag):
+                            reg_matrix_inv_diag, sparse_jitter=1E-9):
     """Compute the weights to fit the given data (dipoles and charges)
 
     Parameters:
@@ -252,6 +252,9 @@ def compute_weights_charges(charges_train, dipoles_train,
         scalar_kernel_transformed
                             Covariance between the molecular dipoles and
                             the sparse environments of the scalar model
+        sparse_jitter       Constant diagonal to add to the sparse
+                            covariance matrix to make up for rank
+                            deficiency
 
     Concretely, this computes the weights to minimize the loss function:
 
@@ -277,7 +280,7 @@ def compute_weights_charges(charges_train, dipoles_train,
 def compute_weights_charge_constrained(
                     charges_train, dipoles_train,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    reg_matrix_inv_diag):
+                    reg_matrix_inv_diag, sparse_jitter=1E-9):
     """Compute the weights to find a constrained fit the given data
 
     Uses Lagrange multipliers to fit the total charges exactly.
@@ -302,6 +305,9 @@ def compute_weights_charge_constrained(
                             Covariance between the molecular dipoles and
                             the sparse environments of the scalar model
         reg_matrix_inv_diag Diagonal of the inverse regularization matrix
+        sparse_jitter       Constant diagonal to add to the sparse
+                            covariance matrix to make up for rank
+                            deficiency
 
     Returns the weights as well as the values of the Lagrange multipliers
     """
@@ -333,7 +339,7 @@ def compute_weights_charge_constrained(
 def compute_weights_two_model(charges_train, dipoles_train,
                               scalar_kernel_sparse, scalar_kernel_transformed,
                               tensor_kernel_sparse, tensor_kernel_transformed,
-                              reg_matrix_inv_diag):
+                              reg_matrix_inv_diag, sparse_jitter=1E-9):
     """Compute the weights for the two-model problem:
 
     μ_tot = x_1 K_1 + x_2 K_2
@@ -347,6 +353,9 @@ def compute_weights_two_model(charges_train, dipoles_train,
         molecules_train     List of ASE Atoms objects containing the atomic
                             coordinates of the molecules in the training set
         reg_matrix_inv_diag Diagonal of the inverse regularization matrix
+        sparse_jitter       Constant diagonal to add to the sparse
+                            covariance matrix to make up for rank
+                            deficiency
         Kernel matrices:
         scalar_kernel_sparse
                             Covariance between the sparse environments

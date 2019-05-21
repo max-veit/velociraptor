@@ -140,7 +140,8 @@ def transform_sparse_kernels(geometries, scalar_kernel_sparse, scalar_weight,
     return scalar_kernel_sparse, tensor_kernel_sparse
 
 def compute_weights(args, dipoles, charges,
-                    scalar_kernel_transformed, tensor_kernel_transformed):
+                    scalar_kernel_sparse, scalar_kernel_transformed,
+                    tensor_kernel_sparse, tensor_kernel_transformed):
     if (args.scalar_weight == 0) and (args.tensor_weight == 0):
         raise ValueError("Both weights set to zero, can't fit with no data.")
     elif ((args.charge_mode != 'fit') and (args.scalar_weight != 0)
@@ -170,27 +171,29 @@ def compute_weights(args, dipoles, charges,
             return fitutils.compute_weights_charges(
                     charges, dipoles,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    regularizer)
+                    regularizer, args.sparse_jitter)
         elif args.scalar_weight == 0:
             logger.warn("Doing tensor kernel fitting with charges; since l=1 "
                         "kernels are insensitive to scalars, this is exactly "
                         "the same as tensor fitting without charges.")
             return fitutils.compute_weights(
                     dipoles, tensor_kernel_sparse,
-                    tensor_kernel_transformed, regularizer)
+                    tensor_kernel_transformed, regularizer,
+                    args.sparse_jitter)
         else:
             return fitutils.compute_weights_two_model(
                         charges, dipoles,
                         scalar_kernel_sparse, scalar_kernel_transformed,
                         tensor_kernel_sparse, tensor_kernel_transformed,
-                        regularizer)
+                        regularizer, args.sparse_jitter)
     elif args.charge_mode == 'lagrange':
         if args.tensor_weight != 0:
             raise ValueError("Charge constraints not yet implemented together "
                              "with tensor fitting")
         weights = fitutils.compute_weights_charge_constrained(
                 charges, dipoles,
-                scalar_kernel_sparse, scalar_kernel_transformed, regularizer)
+                scalar_kernel_sparse, scalar_kernel_transformed, regularizer,
+                args.sparse_jitter)
         return weights
     else:
         raise ValueError("Unrecognized charge mode '%s'".format(charge_mode))
@@ -258,7 +261,8 @@ if __name__ == "__main__":
     del tensor_kernel_full_sparse
     weights = compute_weights(
         args, dipoles, charges,
-        scalar_kernel_transformed, tensor_kernel_transformed)
+        scalar_kernel_sparse, scalar_kernel_transformed,
+        tensor_kernel_sparse, tensor_kernel_transformed)
     np.save(args.weights_output, weights)
     if args.print_residuals or (args.write_residuals is not None):
         compute_own_residuals(args, weights, dipoles, charges, natoms_list,
