@@ -72,6 +72,9 @@ parser.add_argument('-pr', '--print-residuals', action='store_true',
 parser.add_argument('-wr', '--write-residuals', metavar='FILE',
                     help="File in which to write the individual (non-RMSed) "
                     "residuals.  If not given, these will not be written.")
+parser.add_argument('-pw', '--print-weight-norm', action='store_true',
+                    help="Print the norm of the weights? (useful for quick "
+                    "sanity checks)")
 parser.add_argument('-mm', '--memory-map', action='store_true',
                     help="Memory-map the larger kernels to save memory? (they "
                     "will still be read in after slicing and transforming)")
@@ -268,4 +271,6 @@ if __name__ == "__main__":
         compute_own_residuals(args, weights, dipoles, charges, natoms_list,
                               scalar_kernel_transformed,
                               tensor_kernel_transformed)
+    if args.print_weight_norm:
+        print("Norm (L2) of weights: {:.4f}".format(np.linalg.norm(weights)))
 
