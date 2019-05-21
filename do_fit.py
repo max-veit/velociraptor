@@ -13,6 +13,9 @@ import numpy as np
 import fitutils
 import transform
 
+#TODO(max) remove when debugged
+import pdb
+
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,9 @@ parser.add_argument('-rd', '--dipole-regularization', type=float,
 parser.add_argument('-nt', '--num-training-geometries', type=int,
                     metavar='<n>', default=-1,
                     help="Keep only the first <n> geometries for training.")
+parser.add_argument('-sj', '--sparse-jitter', type=float, default=1E-9,
+                    help="Small positive constant to ensure positive "
+                    "definiteness of the kernel matrix")
 parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
                     help="How to control the total charge of each geometry. "
                     "Choices are 'none' (just fit dipoles), 'fit', (fit "
@@ -150,11 +156,13 @@ def compute_weights(args, dipoles, charges,
         if args.tensor_weight == 0:
             return fitutils.compute_weights(
                     dipoles, scalar_kernel_sparse,
-                    scalar_kernel_transformed, regularizer)
+                    scalar_kernel_transformed, regularizer,
+                    args.sparse_jitter)
         elif args.scalar_weight == 0:
             return fitutils.compute_weights(
                     dipoles, tensor_kernel_sparse,
-                    tensor_kernel_transformed, regularizer)
+                    tensor_kernel_transformed, regularizer,
+                    args.sparse_jitter)
         else:
             raise ValueError("Can't do combined fitting without charges")
     elif args.charge_mode == 'fit':

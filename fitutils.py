@@ -206,7 +206,7 @@ def compute_cov_matrices(molecules_train, descriptor_matrix,
 
 
 def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
-                    reg_matrix_inv_diag):
+                    reg_matrix_inv_diag, sparse_jitter=1E-9):
     """Compute the weights to fit the given data (dipoles only)
 
     Parameters:
@@ -216,6 +216,9 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
         kernel_transformed  Covariance between the molecular dipoles and
                             the sparse environments
         reg_matrix_inv_diag Diagonal of the inverse regularization matrix
+        sparse_jitter       Constant diagonal to add to the sparse
+                            covariance matrix to make up for rank
+                            deficiency
 
     Concretely, this computes the weights to minimize the loss function:
 
@@ -227,6 +230,7 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
     In-memory version: Make sure the descriptor matrix is large enough
     to fit in memory!  (offline version coming soon)
     """
+    kernel_sparse[np.diag_indices_from(kernel_sparse)] += sparse_jitter
     weights = np.linalg.solve(
         kernel_sparse
         + (kernel_transformed.T * reg_matrix_inv_diag).dot(kernel_transformed),
