@@ -141,10 +141,10 @@ def compute_weights(args, dipoles, charges,
                                       and (args.tensor_weight != 0)):
         raise ValueError("Combined fitting only works with 'fit' charge-mode")
     if args.charge_mode == 'none':
-        regularizer = args.dipole_regularization * np.ones((dipoles.size,))
+        regularizer = args.dipole_regularization**-2 * np.ones((dipoles.size,))
     else:
-        regularizer = fitutils.make_inv_reg_vector(args.charge_regularization,
-                                                   args.dipole_regularization,
+        regularizer = fitutils.make_inv_reg_vector(args.dipole_regularization,
+                                                   args.charge_regularization,
                                                    len(charges))
     if args.charge_mode == 'none':
         if args.tensor_weight == 0:

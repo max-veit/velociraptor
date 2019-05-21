@@ -23,7 +23,7 @@ def make_reg_vector(dipole_sigma, charge_sigma, n_train):
 
 
 def make_inv_reg_vector(dipole_sigma, charge_sigma, n_train):
-    """Compute the diagonal of the regularization matrix.
+    """Compute the diagonal of the inverse regularization matrix.
 
     (much more space-efficient than computing the whole matrix, because
     numpy also stores all the zeroes -- even for diagonal matrices)
