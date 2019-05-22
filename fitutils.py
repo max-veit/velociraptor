@@ -376,18 +376,18 @@ def compute_weights_two_model(charges_train, dipoles_train,
     weights.
     """
     charges_dipoles_train = merge_charges_dipoles(charges_train, dipoles_train)
-    scalar_block = (scalar_kernel_transformed.T.dot(
-                scalar_kernel_transformed * reg_matrix_inv_diag)
-            + scalar_kernel_sparse)
-    tensor_block = (tensor_kernel_transformed.T.dot(
-                tensor_kernel_transformed * reg_matrix_inv_diag)
-            + tensor_kernel_sparse)
-    off_diag_block = scalar_kernel_transformed.T.dot(
-            tensor_kernel_transformed * reg_matrix_inv_diag)
+    #TODO(max) it might be a good idea to let the two sparse jitters
+    #          be different
+    scalar_block = ((scalar_kernel_transformed.T * reg_matrix_inv_diag).dot(
+                scalar_kernel_transformed) + scalar_kernel_sparse)
+    tensor_block = ((tensor_kernel_transformed.T * reg_matrix_inv_diag).dot(
+                tensor_kernel_transformed) + tensor_kernel_sparse)
+    off_diag_block = (scalar_kernel_transformed.T * reg_matrix_inv_diag).dot(
+                tensor_kernel_transformed)
     lhs_matrix = np.block([[scalar_block,     off_diag_block],
                            [off_diag_block.T, tensor_block]])
     rhs = np.concatenate((scalar_kernel_transformed,
-                          tensor_kernel_transformed), axis=1).dot(
+                          tensor_kernel_transformed), axis=1).T.dot(
                             charges_dipoles_train * reg_matrix_inv_diag)
     weights_combined = np.linalg.solve(lhs_matrix, rhs)
     return weights_combined
