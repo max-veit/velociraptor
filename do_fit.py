@@ -142,6 +142,7 @@ def transform_sparse_kernels(geometries, scalar_kernel_sparse, scalar_weight,
                 * tensor_weight)
     return scalar_kernel_sparse, tensor_kernel_sparse
 
+
 def compute_weights(args, dipoles, charges,
                     scalar_kernel_sparse, scalar_kernel_transformed,
                     tensor_kernel_sparse, tensor_kernel_transformed):
@@ -150,6 +151,11 @@ def compute_weights(args, dipoles, charges,
     elif ((args.charge_mode != 'fit') and (args.scalar_weight != 0)
                                       and (args.tensor_weight != 0)):
         raise ValueError("Combined fitting only works with 'fit' charge-mode")
+    if args.charge_mode == 'fit' and args.scalar_weight == 0:
+        args.charge_mode = 'none'
+        logger.warning("Doing tensor kernel fitting with charges; since l=1 "
+                       "kernels are insensitive to scalars, this is exactly "
+                       "the same as tensor fitting without charges.")
     if args.charge_mode == 'none':
         regularizer = args.dipole_regularization**-2 * np.ones((dipoles.size,))
     else:
@@ -158,11 +164,15 @@ def compute_weights(args, dipoles, charges,
                                                    len(charges))
     if args.charge_mode == 'none':
         if args.tensor_weight == 0:
+            scalar_kernel_transformed = np.delete(
+                    scalar_kernel_transformed, slice(None, None, 4), axis=0)
             return fitutils.compute_weights(
                     dipoles, scalar_kernel_sparse,
                     scalar_kernel_transformed, regularizer,
                     args.sparse_jitter)
         elif args.scalar_weight == 0:
+            tensor_kernel_transformed = np.delete(
+                    tensor_kernel_transformed, slice(None, None, 4), axis=0)
             return fitutils.compute_weights(
                     dipoles, tensor_kernel_sparse,
                     tensor_kernel_transformed, regularizer,
@@ -175,14 +185,6 @@ def compute_weights(args, dipoles, charges,
                     charges, dipoles,
                     scalar_kernel_sparse, scalar_kernel_transformed,
                     regularizer, args.sparse_jitter)
-        elif args.scalar_weight == 0:
-            logger.warn("Doing tensor kernel fitting with charges; since l=1 "
-                        "kernels are insensitive to scalars, this is exactly "
-                        "the same as tensor fitting without charges.")
-            return fitutils.compute_weights(
-                    dipoles, tensor_kernel_sparse,
-                    tensor_kernel_transformed, regularizer,
-                    args.sparse_jitter)
         else:
             return fitutils.compute_weights_two_model(
                         charges, dipoles,
@@ -205,10 +207,14 @@ def compute_weights(args, dipoles, charges,
 def compute_own_residuals(
         args, weights, dipoles, charges, natoms_list,
         scalar_kernel_transformed, tensor_kernel_transformed):
-    if args.charge_mode != 'none':
+    if args.charge_mode != 'none' and args.scalar_weight != 0:
         charges_test = charges
     else:
         charges_test = None
+        scalar_kernel_transformed = np.delete(
+                scalar_kernel_transformed, slice(None, None, 4), axis=0)
+        tensor_kernel_transformed = np.delete(
+                tensor_kernel_transformed, slice(None, None, 4), axis=0)
     if args.tensor_weight == 0:
         kernels = scalar_kernel_transformed
     elif args.scalar_weight == 0:
@@ -254,11 +260,6 @@ if __name__ == "__main__":
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
         geometries, scalar_kernel_full_sparse, args.scalar_weight,
                     tensor_kernel_full_sparse, args.tensor_weight)
-    if args.charge_mode == 'none':
-        scalar_kernel_transformed = np.delete(
-                scalar_kernel_transformed, slice(None, None, 4), axis=0)
-        tensor_kernel_transformed = np.delete(
-                tensor_kernel_transformed, slice(None, None, 4), axis=0)
     # Close files or free memory for what comes next
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
