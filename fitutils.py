@@ -267,6 +267,8 @@ def compute_weights_charges(charges_train, dipoles_train,
     In-memory version: Make sure the descriptor matrix is large enough
     to fit in memory!  (offline version coming soon)
     """
+    scalar_kernel_sparse[
+            np.diag_indices_from(scalar_kernel_sparse)] += sparse_jitter
     charges_dipoles_train = merge_charges_dipoles(charges_train, dipoles_train)
     weights = np.linalg.solve(
         scalar_kernel_sparse
@@ -314,6 +316,8 @@ def compute_weights_charge_constrained(
     cov_matrix_charges = scalar_kernel_transformed[::4]
     cov_matrix_dipoles = np.delete(scalar_kernel_transformed,
         np.arange(0, scalar_kernel_transformed.shape[0], 4), axis=0)
+    scalar_kernel_sparse[
+            np.diag_indices_from(scalar_kernel_sparse)] += sparse_jitter
     if scalar_kernel_sparse.shape[0] < cov_matrix_charges.shape[0]:
         logger.critical("More constraints than weights; the result will not "
                         "respect the dipoles at all.")
@@ -378,6 +382,10 @@ def compute_weights_two_model(charges_train, dipoles_train,
     charges_dipoles_train = merge_charges_dipoles(charges_train, dipoles_train)
     #TODO(max) it might be a good idea to let the two sparse jitters
     #          be different
+    scalar_kernel_sparse[
+            np.diag_indices_from(scalar_kernel_sparse)] += sparse_jitter
+    tensor_kernel_sparse[
+            np.diag_indices_from(tensor_kernel_sparse)] += sparse_jitter
     scalar_block = ((scalar_kernel_transformed.T * reg_matrix_inv_diag).dot(
                 scalar_kernel_transformed) + scalar_kernel_sparse)
     tensor_block = ((tensor_kernel_transformed.T * reg_matrix_inv_diag).dot(
