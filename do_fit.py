@@ -133,9 +133,10 @@ def transform_sparse_kernels(geometries, scalar_kernel_sparse, scalar_weight,
     if tensor_weight != 0:
         kernel_shape = tensor_kernel_sparse.shape
         if kernel_shape[2:] != (3, 3) or kernel_shape[0] != kernel_shape[1]:
-            raise ValueError('Vector kernel has unrecognized shape: {}, was'
-                    'expecting something of the form (n_sparse, n_sparse, '
-                    '3, 3)'.format(kernel_shape))
+            raise ValueError(
+                    "Vector kernel has unrecognized shape: {}, was"
+                    "expecting something of the form (n_sparse, n_sparse, "
+                    "3, 3)".format(kernel_shape))
         tensor_kernel_sparse = (
                 tensor_kernel_sparse.transpose((0, 2, 1, 3)).reshape(
                     (kernel_shape[0]*3, kernel_shape[1]*3))
@@ -153,9 +154,9 @@ def compute_weights(args, dipoles, charges,
         raise ValueError("Combined fitting only works with 'fit' charge-mode")
     if args.charge_mode == 'fit' and args.scalar_weight == 0:
         args.charge_mode = 'none'
-        logger.warning("Doing tensor kernel fitting with charges; since l=1 "
-                       "kernels are insensitive to scalars, this is exactly "
-                       "the same as tensor fitting without charges.")
+        logger.warning("Requested tensor kernel fitting with charges; since "
+                       "l=1 kernels are insensitive to scalars, this is "
+                       "exactly the same as tensor fitting without charges.")
     if args.charge_mode == 'none':
         regularizer = args.dipole_regularization**-2 * np.ones((dipoles.size,))
     else:

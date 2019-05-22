@@ -226,9 +226,6 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
 
     where K is the covariance between all environments and sparse
     environments, and L transforms the space of environments to dipoles.
-
-    In-memory version: Make sure the descriptor matrix is large enough
-    to fit in memory!  (offline version coming soon)
     """
     kernel_sparse[np.diag_indices_from(kernel_sparse)] += sparse_jitter
     weights = np.linalg.solve(
@@ -319,8 +316,8 @@ def compute_weights_charge_constrained(
     scalar_kernel_sparse[
             np.diag_indices_from(scalar_kernel_sparse)] += sparse_jitter
     if scalar_kernel_sparse.shape[0] < cov_matrix_charges.shape[0]:
-        logger.critical("More constraints than weights; the result will not "
-                        "respect the dipoles at all.")
+        logger.critical("More constraints than weights; the fit will "
+                        "completely ignore the dipoles.")
     # TODO still haven't found a better way to solve the equations than
     #      to construct this huge block matrix
     kernel_block = ((cov_matrix_dipoles.T * reg_matrix_inv_diag).dot(
