@@ -90,6 +90,8 @@ def compute_per_atom_scalar(geometries, weights, kernel_matrix):
         natoms_geom = geom.get_number_of_atoms()
         geom_kernel = kernel_matrix[environ_idx:environ_idx+natoms_geom]
         partial_charges = geom_kernel.dot(weights)
+        geom_positions = geom.get_positions()
+        geom_positions -= np.mean(geom_positions, axis=0)
         atomic_dipoles = geom.get_positions() * partial_charges[:,np.newaxis]
         geom.arrays['partial_charges'] = partial_charges
         geom.arrays['atomic_dipoles_l0'] = atomic_dipoles
