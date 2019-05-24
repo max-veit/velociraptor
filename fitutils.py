@@ -60,6 +60,80 @@ def split_charges_dipoles(charges_dipoles):
     return charges_dipoles[:,0], charges_dipoles[:, 1:4]
 
 
+def compute_per_atom_scalar(geometries, weights, kernel_matrix):
+    """Compute per-atom predictions for the given geometries
+
+    Version for the scalar kernel; computes both partial charges and
+    resulting per-atom dipoles.
+
+    Parameters:
+        geometries  ASE-compatible list of atoms objects.  The
+                    properties will be added to 'atoms.arrays', hence
+                    the input object will be modified.
+        weights     Weights computed for the fit (only scalar part)
+        kernel_matrix
+                    Kernel between test charges (rows) and model basis
+                    functions (columns).
+                    Note that this should _not_ be transformed or summed
+                    over atoms in a configuration.
+
+    The partial charges are stored under the 'atoms.arrays' key
+    'partial_charge', and the resulting dipoles under
+    'atomic_dipoles_l0'.
+    """
+    if kernel_matrix.shape[0] != sum(geom.get_number_of_atoms()
+                                     for geom in geometries):
+        raise ValueError("Kernel matrix must have as many rows as " +
+                         "environments (atoms) in the list of geometries")
+    environ_idx = 0
+    for geom in geometries:
+        natoms_geom = geom.get_number_of_atoms()
+        geom_kernel = kernel_matrix[environ_idx:environ_idx+natoms_geom]
+        partial_charges = geom_kernel.dot(weights)
+        atomic_dipoles = geom.get_positions() * partial_charges[:,np.newaxis]
+        geom.arrays['partial_charges'] = partial_charges
+        geom.arrays['atomic_dipoles_l0'] = atomic_dipoles
+
+
+def compute_per_atom_vector(geometries, weights, kernel_matrix):
+    """Compute per-atom predictions for the given geometries
+
+    Version for the vector kernel; computes only per-atom dipoles.
+
+    Parameters:
+        geometries  ASE-compatible list of atoms objects.  The
+                    properties will be added to 'atoms.arrays', hence
+                    the input object will be modified.
+        weights     Weights computed for the fit (only vector part,
+                    1D array of size 3*(number of sparse environments))
+        kernel_matrix
+                    Kernel between test environments (rows) and model basis
+                    functions (columns).
+                    Note that this should _not_ be transformed or summed
+                    over atoms in a configuration, hence the expected
+                    shape is (n_environments, n_sparse, 3, 3)
+
+    The atomic dipoles are stored under the 'atoms.arrays' key
+    'atomic_dipole_l1'.
+    """
+    if kernel_matrix.shape[0] != sum(geom.get_number_of_atoms()
+                                     for geom in geometries):
+        raise ValueError("Kernel matrix must have as many rows as " +
+                         "environments (atoms) in the list of geometries")
+    if kernel_matrix.shape[2:] != (3, 3):
+        raise ValueError('Vector kernel has unrecognized shape: {}'.format(
+                target_shape))
+    environ_idx = 0
+    n_sparse = kernel_matrix.shape[1]
+    for geom in geometries:
+        natoms_geom = geom.get_number_of_atoms()
+        geom_kernel = kernel_matrix[environ_idx:environ_idx+natoms_geom]
+        geom_kernel = geom_kernel.swapaxes(1, 2).reshape(
+                (natoms_geom, 3, n_sparse*3))
+        atomic_dipoles = geom_kernel.dot(weights)
+        geom.arrays['atomic_dipoles_l1'] = atomic_dipoles
+
+
 def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                       charges_test=None, return_rmse=True,
                       intrinsic_dipole_std=None):
