@@ -283,7 +283,7 @@ def compute_cov_matrices(molecules_train, descriptor_matrix,
 
 def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
                     reg_matrix_inv_diag, sparse_jitter=1E-9,
-                    print_condition=False):
+                    condition_cutoff=1E-15, print_condition=False):
     """Compute the weights to fit the given data (dipoles only)
 
     Parameters:
@@ -296,6 +296,10 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
         sparse_jitter       Constant diagonal to add to the sparse
                             covariance matrix to make up for rank
                             deficiency
+        condition_cutoff    If not None, solve using the pseudoinverse
+                            with the given condition-number cutoff (see
+                            the documentation for numpy.linalg.pinv for
+                            details) (default 1E-15)
         print_condition     Print the condition number of the linear
                             problem?
 
@@ -311,16 +315,22 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
                                                             kernel_transformed)
     if print_condition:
         print("Condition number = {:.6g}".format(np.linalg.cond(lhs)))
-    weights = np.linalg.solve(
-        lhs,
-        kernel_transformed.T.dot(dipoles_train.flat * reg_matrix_inv_diag))
+    if condition_cutoff is None:
+        weights = np.linalg.solve(
+            lhs,
+            kernel_transformed.T.dot(dipoles_train.flat * reg_matrix_inv_diag))
+    else:
+        weights = np.linalg.lstsq(
+            lhs,
+            kernel_transformed.T.dot(dipoles_train.flat * reg_matrix_inv_diag),
+            rcond=condition_cutoff)[0]
     return weights
 
 
 def compute_weights_charges(charges_train, dipoles_train,
                             scalar_kernel_sparse, scalar_kernel_transformed,
                             reg_matrix_inv_diag, sparse_jitter=1E-9,
-                            print_condition=False):
+                            condition_cutoff=1E-15, print_condition=False):
     """Compute the weights to fit the given data (dipoles and charges)
 
     Parameters:
@@ -335,6 +345,10 @@ def compute_weights_charges(charges_train, dipoles_train,
         sparse_jitter       Constant diagonal to add to the sparse
                             covariance matrix to make up for rank
                             deficiency
+        condition_cutoff    If not None, solve using the pseudoinverse
+                            with the given condition-number cutoff (see
+                            the documentation for numpy.linalg.pinv for
+                            details) (default 1E-15)
         print_condition     Print the condition number of the linear
                             problem?
 
@@ -357,8 +371,13 @@ def compute_weights_charges(charges_train, dipoles_train,
             scalar_kernel_transformed))
     if print_condition:
         print("Condition number = {:.6g}".format(np.linalg.cond(lhs)))
-    weights = np.linalg.solve(lhs, scalar_kernel_transformed.T.dot(
-                          charges_dipoles_train * reg_matrix_inv_diag))
+    if condition_cutoff is None:
+        weights = np.linalg.solve(lhs, scalar_kernel_transformed.T.dot(
+                              charges_dipoles_train * reg_matrix_inv_diag))
+    else:
+        weights = np.linalg.lstsq(lhs, scalar_kernel_transformed.T.dot(
+                              charges_dipoles_train * reg_matrix_inv_diag),
+                                  rcond=condition_cutoff)[0]
     return weights
 
 
@@ -427,6 +446,7 @@ def compute_weights_two_model(charges_train, dipoles_train,
                               scalar_kernel_sparse, scalar_kernel_transformed,
                               tensor_kernel_sparse, tensor_kernel_transformed,
                               reg_matrix_inv_diag, sparse_jitter=1E-9,
+                              condition_cutoff=1E-15,
                               print_condition=False):
     """Compute the weights for the two-model problem:
 
@@ -444,6 +464,10 @@ def compute_weights_two_model(charges_train, dipoles_train,
         sparse_jitter       Constant diagonal to add to the sparse
                             covariance matrix to make up for rank
                             deficiency
+        condition_cutoff    If not None, solve using the pseudoinverse
+                            with the given condition-number cutoff (see
+                            the documentation for numpy.linalg.pinv for
+                            details) (default 1E-15)
         print_condition     Print the condition number of the linear
                             problem?
         Kernel matrices:
@@ -486,6 +510,12 @@ def compute_weights_two_model(charges_train, dipoles_train,
     rhs = np.concatenate((scalar_kernel_transformed,
                           tensor_kernel_transformed), axis=1).T.dot(
                             charges_dipoles_train * reg_matrix_inv_diag)
-    weights_combined = np.linalg.solve(lhs_matrix, rhs)
+    if condition_cutoff is None:
+        weights_combined = np.linalg.solve(lhs_matrix, rhs)
+    else:
+        #TODO(max) make some use of the discarded information
+        #          (rank, singular values)?
+        weights_combined = np.linalg.lstsq(lhs_matrix, rhs,
+                                           rcond=condition_cutoff)[0]
     return weights_combined
 
