@@ -282,7 +282,8 @@ def compute_cov_matrices(molecules_train, descriptor_matrix,
 
 
 def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
-                    reg_matrix_inv_diag, sparse_jitter=1E-9):
+                    reg_matrix_inv_diag, sparse_jitter=1E-9,
+                    print_condition=False):
     """Compute the weights to fit the given data (dipoles only)
 
     Parameters:
@@ -295,6 +296,8 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
         sparse_jitter       Constant diagonal to add to the sparse
                             covariance matrix to make up for rank
                             deficiency
+        print_condition     Print the condition number of the linear
+                            problem?
 
     Concretely, this computes the weights to minimize the loss function:
 
@@ -304,16 +307,20 @@ def compute_weights(dipoles_train, kernel_sparse, kernel_transformed,
     environments, and L transforms the space of environments to dipoles.
     """
     kernel_sparse[np.diag_indices_from(kernel_sparse)] += sparse_jitter
+    lhs = kernel_sparse + (kernel_transformed.T * reg_matrix_inv_diag).dot(
+                                                            kernel_transformed)
+    if print_condition:
+        print("Condition number = {:.6g}".format(np.linalg.cond(lhs)))
     weights = np.linalg.solve(
-        kernel_sparse
-        + (kernel_transformed.T * reg_matrix_inv_diag).dot(kernel_transformed),
+        lhs,
         kernel_transformed.T.dot(dipoles_train.flat * reg_matrix_inv_diag))
     return weights
 
 
 def compute_weights_charges(charges_train, dipoles_train,
                             scalar_kernel_sparse, scalar_kernel_transformed,
-                            reg_matrix_inv_diag, sparse_jitter=1E-9):
+                            reg_matrix_inv_diag, sparse_jitter=1E-9,
+                            print_condition=False):
     """Compute the weights to fit the given data (dipoles and charges)
 
     Parameters:
@@ -328,6 +335,8 @@ def compute_weights_charges(charges_train, dipoles_train,
         sparse_jitter       Constant diagonal to add to the sparse
                             covariance matrix to make up for rank
                             deficiency
+        print_condition     Print the condition number of the linear
+                            problem?
 
     Concretely, this computes the weights to minimize the loss function:
 
@@ -343,12 +352,13 @@ def compute_weights_charges(charges_train, dipoles_train,
     scalar_kernel_sparse[
             np.diag_indices_from(scalar_kernel_sparse)] += sparse_jitter
     charges_dipoles_train = merge_charges_dipoles(charges_train, dipoles_train)
-    weights = np.linalg.solve(
-        scalar_kernel_sparse
-        + (scalar_kernel_transformed.T * reg_matrix_inv_diag).dot(
-            scalar_kernel_transformed),
-        scalar_kernel_transformed.T.dot(
-            charges_dipoles_train * reg_matrix_inv_diag))
+    lhs = (scalar_kernel_sparse +
+           (scalar_kernel_transformed.T * reg_matrix_inv_diag).dot(
+            scalar_kernel_transformed))
+    if print_condition:
+        print("Condition number = {:.6g}".format(np.linalg.cond(lhs)))
+    weights = np.linalg.solve(lhs, scalar_kernel_transformed.T.dot(
+                          charges_dipoles_train * reg_matrix_inv_diag))
     return weights
 
 
@@ -416,7 +426,8 @@ def compute_weights_charge_constrained(
 def compute_weights_two_model(charges_train, dipoles_train,
                               scalar_kernel_sparse, scalar_kernel_transformed,
                               tensor_kernel_sparse, tensor_kernel_transformed,
-                              reg_matrix_inv_diag, sparse_jitter=1E-9):
+                              reg_matrix_inv_diag, sparse_jitter=1E-9,
+                              print_condition=False):
     """Compute the weights for the two-model problem:
 
     μ_tot = x_1 K_1 + x_2 K_2
@@ -433,6 +444,8 @@ def compute_weights_two_model(charges_train, dipoles_train,
         sparse_jitter       Constant diagonal to add to the sparse
                             covariance matrix to make up for rank
                             deficiency
+        print_condition     Print the condition number of the linear
+                            problem?
         Kernel matrices:
         scalar_kernel_sparse
                             Covariance between the sparse environments
@@ -467,6 +480,9 @@ def compute_weights_two_model(charges_train, dipoles_train,
                 tensor_kernel_transformed)
     lhs_matrix = np.block([[scalar_block,     off_diag_block],
                            [off_diag_block.T, tensor_block]])
+    if print_condition:
+        print("Condition number = {:.6g}".format(
+            np.linalg.cond(lhs_matrix)))
     rhs = np.concatenate((scalar_kernel_transformed,
                           tensor_kernel_transformed), axis=1).T.dot(
                             charges_dipoles_train * reg_matrix_inv_diag)

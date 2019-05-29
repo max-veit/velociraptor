@@ -75,6 +75,9 @@ parser.add_argument('-wr', '--write-residuals', metavar='FILE',
 parser.add_argument('-pw', '--print-weight-norm', action='store_true',
                     help="Print the norm of the weights? (useful for quick "
                     "sanity checks)")
+parser.add_argument('-pc', '--print-condition-number', action='store_true',
+                    help="Print the condition number of the linear system "
+                    "to be solved?")
 parser.add_argument('-mm', '--memory-map', action='store_true',
                     help="Memory-map the larger kernels to save memory? (they "
                     "will still be read in after slicing and transforming)")
@@ -170,14 +173,16 @@ def compute_weights(args, dipoles, charges,
             return fitutils.compute_weights(
                     dipoles, scalar_kernel_sparse,
                     scalar_kernel_transformed, regularizer,
-                    args.sparse_jitter)
+                    args.sparse_jitter,
+                    print_condition=args.print_condition_number)
         elif args.scalar_weight == 0:
             tensor_kernel_transformed = np.delete(
                     tensor_kernel_transformed, slice(None, None, 4), axis=0)
             return fitutils.compute_weights(
                     dipoles, tensor_kernel_sparse,
                     tensor_kernel_transformed, regularizer,
-                    args.sparse_jitter)
+                    args.sparse_jitter,
+                    print_condition=args.print_condition_number)
         else:
             raise ValueError("Can't do combined fitting without charges")
     elif args.charge_mode == 'fit':
@@ -185,13 +190,15 @@ def compute_weights(args, dipoles, charges,
             return fitutils.compute_weights_charges(
                     charges, dipoles,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    regularizer, args.sparse_jitter)
+                    regularizer, args.sparse_jitter,
+                    print_condition=args.print_condition_number)
         else:
             return fitutils.compute_weights_two_model(
                         charges, dipoles,
                         scalar_kernel_sparse, scalar_kernel_transformed,
                         tensor_kernel_sparse, tensor_kernel_transformed,
-                        regularizer, args.sparse_jitter)
+                        regularizer, args.sparse_jitter,
+                        print_condition=args.print_condition_number)
     elif args.charge_mode == 'lagrange':
         if args.tensor_weight != 0:
             raise ValueError("Charge constraints not yet implemented together "
