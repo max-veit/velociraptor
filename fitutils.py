@@ -3,7 +3,7 @@
 import logging
 import numpy as np
 
-import transform
+from . import transform
 
 
 logger = logging.getLogger(__name__)

@@ -8,9 +8,9 @@ import logging
 import ase
 import numpy as np
 
-import do_fit
-import fitutils
-import transform
+from . import do_fit
+from . import fitutils
+from . import transform
 
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     dipoles = np.loadtxt(args.dipoles)
     weights = np.load(args.weights)
     args.charge_mode = 'fit'
-    do_fit.compute_own_residuals(args, weights, dipoles, charges, natoms_list,
-                                 scalar_kernel_transformed,
-                                 tensor_kernel_transformed)
+    do_fit.compute_residuals(weights, dipoles, charges, natoms_list,
+                             scalar_kernel_transformed,
+                             tensor_kernel_transformed, **vars(args))
 

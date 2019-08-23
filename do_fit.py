@@ -10,11 +10,8 @@ import ase
 import ase.io
 import numpy as np
 
-import fitutils
-import transform
-
-#TODO(max) remove when debugged
-import pdb
+from . import fitutils
+from . import transform
 
 
 logger = logging.getLogger(__name__)
@@ -147,75 +144,82 @@ def transform_sparse_kernels(geometries, scalar_kernel_sparse, scalar_weight,
     return scalar_kernel_sparse, tensor_kernel_sparse
 
 
-def compute_weights(args, dipoles, charges,
+def compute_weights(dipoles, charges,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    tensor_kernel_sparse, tensor_kernel_transformed):
-    if (args.scalar_weight == 0) and (args.tensor_weight == 0):
+                    tensor_kernel_sparse, tensor_kernel_transformed,
+                    scalar_weight=0, tensor_weight=0, charge_mode='none',
+                    dipole_regularization=1.0, charge_regularization=1.0,
+                    sparse_jitter=1E-10, print_condition_number=False,
+                    **extra_args):
+    if (scalar_weight == 0) and (tensor_weight == 0):
         raise ValueError("Both weights set to zero, can't fit with no data.")
-    elif ((args.charge_mode != 'fit') and (args.scalar_weight != 0)
-                                      and (args.tensor_weight != 0)):
+    elif ((charge_mode != 'fit') and (scalar_weight != 0)
+                                 and (tensor_weight != 0)):
         raise ValueError("Combined fitting only works with 'fit' charge-mode")
-    if args.charge_mode == 'fit' and args.scalar_weight == 0:
-        args.charge_mode = 'none'
+    if charge_mode == 'fit' and scalar_weight == 0:
+        charge_mode = 'none'
         logger.warning("Requested tensor kernel fitting with charges; since "
                        "l=1 kernels are insensitive to scalars, this is "
                        "exactly the same as tensor fitting without charges.")
-    if args.charge_mode == 'none':
-        regularizer = args.dipole_regularization**-2 * np.ones((dipoles.size,))
+    if charge_mode == 'none':
+        regularizer = dipole_regularization**-2 * np.ones((dipoles.size,))
     else:
-        regularizer = fitutils.make_inv_reg_vector(args.dipole_regularization,
-                                                   args.charge_regularization,
+        regularizer = fitutils.make_inv_reg_vector(dipole_regularization,
+                                                   charge_regularization,
                                                    len(charges))
-    if args.charge_mode == 'none':
-        if args.tensor_weight == 0:
+    if charge_mode == 'none':
+        if tensor_weight == 0:
             scalar_kernel_transformed = np.delete(
                     scalar_kernel_transformed, slice(None, None, 4), axis=0)
             return fitutils.compute_weights(
                     dipoles, scalar_kernel_sparse,
                     scalar_kernel_transformed, regularizer,
-                    args.sparse_jitter,
-                    print_condition=args.print_condition_number)
-        elif args.scalar_weight == 0:
+                    sparse_jitter,
+                    print_condition=print_condition_number)
+        elif scalar_weight == 0:
             tensor_kernel_transformed = np.delete(
                     tensor_kernel_transformed, slice(None, None, 4), axis=0)
             return fitutils.compute_weights(
                     dipoles, tensor_kernel_sparse,
                     tensor_kernel_transformed, regularizer,
-                    args.sparse_jitter,
-                    print_condition=args.print_condition_number)
+                    sparse_jitter,
+                    print_condition=print_condition_number)
         else:
             raise ValueError("Can't do combined fitting without charges")
-    elif args.charge_mode == 'fit':
-        if args.tensor_weight == 0:
+    elif charge_mode == 'fit':
+        if tensor_weight == 0:
             return fitutils.compute_weights_charges(
                     charges, dipoles,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    regularizer, args.sparse_jitter,
-                    print_condition=args.print_condition_number)
+                    regularizer, sparse_jitter,
+                    print_condition=print_condition_number)
         else:
             return fitutils.compute_weights_two_model(
                         charges, dipoles,
                         scalar_kernel_sparse, scalar_kernel_transformed,
                         tensor_kernel_sparse, tensor_kernel_transformed,
-                        regularizer, args.sparse_jitter,
-                        print_condition=args.print_condition_number)
-    elif args.charge_mode == 'lagrange':
-        if args.tensor_weight != 0:
+                        regularizer, sparse_jitter,
+                        print_condition=print_condition_number)
+    elif charge_mode == 'lagrange':
+        if tensor_weight != 0:
             raise ValueError("Charge constraints not yet implemented together "
                              "with tensor fitting")
         weights = fitutils.compute_weights_charge_constrained(
                 charges, dipoles,
                 scalar_kernel_sparse, scalar_kernel_transformed, regularizer,
-                args.sparse_jitter)
+                sparse_jitter)
         return weights
     else:
         raise ValueError("Unrecognized charge mode '%s'".format(charge_mode))
 
 
-def compute_own_residuals(
-        args, weights, dipoles, charges, natoms_list,
-        scalar_kernel_transformed, tensor_kernel_transformed):
-    if args.charge_mode != 'none' and args.scalar_weight != 0:
+def compute_residuals(
+        weights, dipoles, charges, natoms_list,
+        scalar_kernel_transformed, tensor_kernel_transformed,
+        scalar_weight=0, tensor_weight=0, charge_mode=None,
+        intrinsic_variation=None, print_residuals=True, write_residuals=None,
+        **extra_args):
+    if charge_mode != 'none' and scalar_weight != 0:
         charges_test = charges
     else:
         charges_test = None
@@ -223,27 +227,27 @@ def compute_own_residuals(
                 scalar_kernel_transformed, slice(None, None, 4), axis=0)
         tensor_kernel_transformed = np.delete(
                 tensor_kernel_transformed, slice(None, None, 4), axis=0)
-    if args.tensor_weight == 0:
+    if tensor_weight == 0:
         kernels = scalar_kernel_transformed
-    elif args.scalar_weight == 0:
+    elif scalar_weight == 0:
         kernels = tensor_kernel_transformed
     else:
         kernels = [scalar_kernel_transformed, tensor_kernel_transformed]
         weights = np.split(weights,
                            np.array([scalar_kernel_transformed.shape[1]]))
-    intrinsic_dipole_std = vars(args).get('intrinsic_variation')
     residuals = fitutils.compute_residuals(
         weights, kernels, dipoles, natoms_list,
-        charges_test=charges_test, return_rmse=args.print_residuals,
-        intrinsic_dipole_std=intrinsic_dipole_std)
+        charges_test=charges_test, return_rmse=print_residuals,
+        intrinsic_dipole_std=intrinsic_variation)
     if 'dipole_rmse' in residuals:
         print("Dipole RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
             residuals['dipole_rmse'], residuals['dipole_frac']))
     if 'charge_rmse' in residuals:
         print("Charge RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
             residuals['charge_rmse'], residuals['charge_frac']))
-    if args.write_residuals is not None:
-        np.savez(args.write_residuals, **residuals)
+    if write_residuals is not None:
+        np.savez(write_residuals, **residuals)
+    return residuals
 
 
 if __name__ == "__main__":
@@ -272,14 +276,15 @@ if __name__ == "__main__":
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
     weights = compute_weights(
-        args, dipoles, charges,
+        dipoles, charges,
         scalar_kernel_sparse, scalar_kernel_transformed,
-        tensor_kernel_sparse, tensor_kernel_transformed)
+        tensor_kernel_sparse, tensor_kernel_transformed,
+        **vars(args))
     np.save(args.weights_output, weights)
     if args.print_residuals or (args.write_residuals is not None):
-        compute_own_residuals(args, weights, dipoles, charges, natoms_list,
-                              scalar_kernel_transformed,
-                              tensor_kernel_transformed)
+        compute_residuals(weights, dipoles, charges, natoms_list,
+                          scalar_kernel_transformed,
+                          tensor_kernel_transformed, **vars(args))
     if args.print_weight_norm:
         print("Norm (L2) of weights: {:.4f}".format(np.linalg.norm(weights)))
 
