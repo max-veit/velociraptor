@@ -106,7 +106,7 @@ def transform_vector_envts_charge_dipoles(molecules, target_matrix):
         molecule_target = target_matrix[environ_idx:environ_idx+natoms_mol]
         environ_idx += natoms_mol
         target_transformed[4*mol_idx + 1 : 4*mol_idx + 4] = (
-            molecule_target.sum(axis=0).transpose(1, 0, 2).reshape(3, -1))
+            molecule_target.mean(axis=0).transpose(1, 0, 2).reshape(3, -1))
     return target_transformed
 
 
