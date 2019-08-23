@@ -8,9 +8,8 @@ import logging
 import ase
 import numpy as np
 
-from . import do_fit
-from . import fitutils
-from . import transform
+from velociraptor.fitutils import (transform_kernels, compute_residuals,
+                                   get_charges)
 
 
 logger = logging.getLogger(__name__)
@@ -72,14 +71,14 @@ if __name__ == "__main__":
     geometries = ase.io.read(args.geometries, ':')
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     (scalar_kernel_transformed,
-     tensor_kernel_transformed) = do_fit.transform_kernels(
+     tensor_kernel_transformed) = transform_kernels(
                                 geometries, scalar_kernel, args.scalar_weight,
                                             tensor_kernel, args.tensor_weight)
-    charges = do_fit.get_charges(geometries)
+    charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     weights = np.load(args.weights)
     args.charge_mode = 'fit'
-    do_fit.compute_residuals(weights, dipoles, charges, natoms_list,
-                             scalar_kernel_transformed,
-                             tensor_kernel_transformed, **vars(args))
+    compute_residuals(weights, dipoles, charges, natoms_list,
+                      scalar_kernel_transformed,
+                      tensor_kernel_transformed, **vars(args))
 
