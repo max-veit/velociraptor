@@ -1,5 +1,5 @@
-# grud
-GRand Unified Dipole (learning)
+# VELOCIRAPTOR
+Vector Learning Oggmented with Charges on Individual Realistic Atomic Positions
 
 # To build kernels
 
