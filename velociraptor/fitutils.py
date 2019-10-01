@@ -6,6 +6,9 @@ import numpy as np
 from . import solvers
 from . import transform
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def get_charges(geometries):
     return np.array([geom.info.get('total_charge', 0.) for geom in geometries])

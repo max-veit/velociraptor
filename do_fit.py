@@ -6,12 +6,11 @@ import argparse
 import logging
 import sys
 
-import ase
 import ase.io
 import numpy as np
 
 from velociraptor.fitutils import (transform_kernels, transform_sparse_kernels,
-                                   compute_residuals, get_charges)
+                                   compute_weights, compute_residuals, get_charges)
 
 
 logger = logging.getLogger(__name__)
@@ -98,6 +97,8 @@ def load_kernels(args):
     else:
         tensor_kernel = np.array([])
         tensor_kernel_sparse = np.array([])
+    del args.scalar_kernel_sparse
+    del args.tensor_kernel_sparse
     return (scalar_kernel_sparse, scalar_kernel,
             tensor_kernel_sparse, tensor_kernel)
 
@@ -112,6 +113,7 @@ if __name__ == "__main__":
         n_train = len(geometries)
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)[:n_train]
+    del args.dipoles
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     n_descriptors = sum(natoms_list)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,

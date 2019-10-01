@@ -5,7 +5,7 @@
 import argparse
 import logging
 
-import ase
+import ase.io
 import numpy as np
 
 from velociraptor.fitutils import (transform_kernels, compute_residuals,
@@ -59,6 +59,8 @@ def load_kernels(args):
         tensor_kernel = np.load(args.tensor_kernel)
     else:
         tensor_kernel = np.array([])
+    del args.scalar_kernel
+    del args.tensor_kernel
     return (scalar_kernel, tensor_kernel)
 
 
@@ -77,6 +79,8 @@ if __name__ == "__main__":
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     weights = np.load(args.weights)
+    del args.dipoles
+    del args.weights
     args.charge_mode = 'fit'
     compute_residuals(weights, dipoles, charges, natoms_list,
                       scalar_kernel_transformed,
