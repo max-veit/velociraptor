@@ -1,5 +1,5 @@
 # VELOCIRAPTOR
-Vector Learning Oggmented with Charges on Individual Realistic Atomic Positions
+Vector Learning Oggmented with Charges on Individual Realistic Atomic Positions to Optimize Regression
 
 # To build kernels
 
