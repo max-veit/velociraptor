@@ -24,63 +24,83 @@ parser = argparse.ArgumentParser(
     "Setting either of the (scalar or tensor) weights to zero will turn "
     "off that component completely and the corresponding kernel file(s) "
     "will not be read.")
-parser.add_argument('geometries', help="Geometries of the molecules in the "
-    "fit; should be the name of a file readable by ASE.")
-parser.add_argument('dipoles', help="Dipoles, in Cartesian coordinates, "
-    "per geometry.  Entries must be in the same order as the geometry file.")
-parser.add_argument('scalar_kernel_sparse', help="Filename for the "
-    "sparse-sparse (MM) scalar kernel, in atomic environment space")
-parser.add_argument('scalar_kernel', help="Filename for the full-sparse "
-    "(NM) scalar kernel, in atomic environment space")
-parser.add_argument('tensor_kernel_sparse', help="Filename for the "
-    "sparse-sparse tensor kernel")
-parser.add_argument('tensor_kernel', help="Filename for the "
-    "full-sparse tensor kernel, mapping Cartesian components to environments")
-parser.add_argument('weights_output', help="Name of a file into which to "
-     "write the output weights")
-parser.add_argument('-ws', '--scalar-weight', type=float, metavar='weight',
-    help="Weight of the scalar component (charges) in the model",
-    required=True)
-parser.add_argument('-wt', '--tensor-weight', type=float, metavar='weight',
-    help="Weight of the tensor component (point dipoles) in the model",
-    required=True)
-parser.add_argument('-rc', '--charge-regularization', type=float, default=1.0,
-                    metavar='sigma_q', help="Regularization coefficient "
-                    "(sigma) for total charges")
-parser.add_argument('-rd', '--dipole-regularization', type=float,
-                    required=True, metavar='sigma_mu', help="Regularization "
-                    "coefficient (sigma) for dipole components")
-parser.add_argument('-nt', '--num-training-geometries', type=int,
-                    metavar='<n>', default=-1,
-                    help="Keep only the first <n> geometries for training.")
-parser.add_argument('-sj', '--sparse-jitter', type=float, default=1E-9,
-                    help="Small positive constant to ensure positive "
-                    "definiteness of the kernel matrix")
-parser.add_argument('-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
-                    help="How to control the total charge of each geometry. "
-                    "Choices are 'none' (just fit dipoles), 'fit', (fit "
-                    "dipoles and charges), and 'lagrange' (constrain total "
-                    "charges exactly using Lagrange multipliers).",
-                    default='fit')
-parser.add_argument('-pr', '--print-residuals', action='store_true',
-                    help="Print the RMSE residuals of the model evaluated on "
-                    "its own training data")
-parser.add_argument('-wr', '--write-residuals', metavar='FILE',
-                    help="File in which to write the individual (non-RMSed) "
-                    "residuals.  If not given, these will not be written.")
-parser.add_argument('-pw', '--print-weight-norm', action='store_true',
-                    help="Print the norm of the weights? (useful for quick "
-                    "sanity checks)")
-parser.add_argument('-pc', '--print-condition-number', action='store_true',
-                    help="Print the condition number of the linear system "
-                    "to be solved?")
-parser.add_argument('-mm', '--memory-map', action='store_true',
-                    help="Memory-map the larger kernels to save memory? (they "
-                    "will still be read in after slicing and transforming)")
+parser.add_argument(
+    'geometries', help="Geometries of the molecules in the fit; should be the "
+            "name of a file readable by ASE.")
+parser.add_argument(
+    'dipoles', help="Dipoles, in Cartesian coordinates, per geometry.  "
+            "Entries must be in the same order as the geometry file.")
+parser.add_argument(
+    'scalar_kernel_sparse', help="Filename for the sparse-sparse (MM) scalar "
+            "kernel, in atomic environment space")
+parser.add_argument(
+    'scalar_kernel', help="Filename for the full-sparse (NM) scalar kernel, "
+            "in atomic environment space")
+parser.add_argument(
+    'tensor_kernel_sparse', help="Filename for the sparse-sparse "
+            "tensor kernel")
+parser.add_argument(
+    'tensor_kernel', help="Filename for the full-sparse tensor kernel, "
+            "mapping Cartesian components to environments")
+parser.add_argument(
+    'weights_output', help="Name of a file into which to write the "
+            "output weights")
+parser.add_argument(
+    '-ws', '--scalar-weight', type=float, metavar='weight',
+            help="Weight of the scalar component (charges) in the model",
+            required=True)
+parser.add_argument(
+    '-wt', '--tensor-weight', type=float, metavar='weight',
+            help="Weight of the tensor component (point dipoles) in the model",
+            required=True)
+parser.add_argument(
+    '-rc', '--charge-regularization', type=float, default=1.0,
+            metavar='sigma_q', help="Regularization coefficient (sigma) "
+            "for total charges")
+parser.add_argument(
+    '-rd', '--dipole-regularization', type=float, required=True,
+            metavar='sigma_mu', help="Regularization coefficient (sigma) "
+            "for dipole components")
+parser.add_argument(
+    '-nt', '--num-training-geometries', type=int, metavar='<n>', default=-1,
+            help="Keep only the first <n> geometries for training.")
+parser.add_argument(
+    '-sj', '--sparse-jitter', type=float, default=0.0, help="Small positive "
+            "constant to ensure positive definiteness of the kernel matrix"
+            " (Warning: Deprecated in favour of np.lstsq to strip out small "
+            " eigenvalues in a more systematic way)")
+parser.add_argument(
+    '-m', '--charge-mode', choices=['none', 'fit', 'lagrange'],
+            help="How to control the total charge of each geometry. Choices "
+            "are 'none' (just fit dipoles), 'fit', (fit dipoles and charges), "
+            "and 'lagrange' (constrain total charges exactly using "
+            "Lagrange multipliers).", default='fit')
+parser.add_argument(
+    '-pr', '--print-residuals', action='store_true', help="Print the RMSE "
+            "residuals of the model evaluated on its own training data")
+parser.add_argument(
+    '-wr', '--write-residuals', metavar='FILE', help="File in which to write "
+            "the individual (non-RMSed) residuals.  If not given, these will "
+            "not be written.")
+parser.add_argument(
+    '-pw', '--print-weight-norm', action='store_true', help="Print the norm "
+            "of the weights? (useful for quick sanity checks)")
+parser.add_argument(
+    '-pc', '--print-condition-number', action='store_true', help="Print the "
+            "condition number of the linear system to be solved?")
+parser.add_argument(
+    '-mm', '--memory-map', action='store_true', help="Memory-map the larger "
+            "kernels to save memory? (they will still be read in after "
+            "slicing and transforming)")
+parser.add_argument(
+    '-tk', '--transpose-full-kernels', action='store_true', help="Transpose "
+            "the full-sparse kernels, assuming they were stored in the "
+            "opposite order (MN) from the one expected (NM) (where N is full "
+            "and M is sparse)")
 
 
 def load_kernels(args):
-    """Load the kernels from files"""
+    """Load the kernels from files, transposing if necessary"""
     if args.memory_map:
         mmap_mode = 'r'
     else:
@@ -88,12 +108,20 @@ def load_kernels(args):
     if args.scalar_weight != 0:
         scalar_kernel_sparse = np.load(args.scalar_kernel_sparse)
         scalar_kernel = np.load(args.scalar_kernel, mmap_mode=mmap_mode)
+        if args.transpose_full_kernels:
+            scalar_kernel = scalar_kernel.transpose()
     else:
         scalar_kernel = np.array([])
         scalar_kernel_sparse = np.array([])
     if args.tensor_weight != 0:
         tensor_kernel_sparse = np.load(args.tensor_kernel_sparse)
         tensor_kernel = np.load(args.tensor_kernel, mmap_mode=mmap_mode)
+        if args.transpose_full_kernels:
+            n_sparse_envs, n_full_envs, _, _ = tensor_kernel.shape
+            tensor_kernel = tensor_kernel.transpose((0, 2, 1, 3)).reshape(
+                    (n_sparse_envs * 3, n_full_envs * 3).transpose().reshape(
+                    (n_full_envs, 3, n_sparse_envs, 3)).transpose(
+                    (0, 2, 1, 3))
     else:
         tensor_kernel = np.array([])
         tensor_kernel_sparse = np.array([])
