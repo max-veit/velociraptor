@@ -62,6 +62,11 @@ parser.add_argument(
             metavar='sigma_mu', help="Regularization coefficient (sigma) "
             "for dipole components")
 parser.add_argument(
+    '-dm', '--dipole-per-molecule', action='store_true',
+            help="Don't normalize the dipole by the number of atoms before "
+            "fitting (not recommended, the default of per-atom normalization "
+            "significantly improves fit stability)")
+parser.add_argument(
     '-nt', '--num-training-geometries', type=int, metavar='<n>', default=-1,
             help="Keep only the first <n> geometries for training.")
 parser.add_argument(
@@ -143,6 +148,8 @@ if __name__ == "__main__":
     dipoles = np.loadtxt(args.dipoles)[:n_train]
     del args.dipoles
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
+    if not args.dipole_per_molecule:
+        dipoles = dipoles / natoms_list
     n_descriptors = sum(natoms_list)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
      tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)

@@ -126,7 +126,7 @@ def compute_residuals(
         scalar_kernel_transformed, tensor_kernel_transformed,
         scalar_weight=0, tensor_weight=0, charge_mode=None,
         intrinsic_variation=None, print_residuals=True, write_residuals=None,
-        **extra_args):
+        dipole_per_molecule=False, **extra_args):
     if charge_mode != 'none' and scalar_weight != 0:
         charges_test = charges
     else:
@@ -146,7 +146,8 @@ def compute_residuals(
     residuals = solvers.compute_residuals(
         weights, kernels, dipoles, natoms_list,
         charges_test=charges_test, return_rmse=print_residuals,
-        intrinsic_dipole_std=intrinsic_variation)
+        intrinsic_dipole_std=intrinsic_variation,
+        dipole_per_molecule=dipole_per_molecule)
     if 'dipole_rmse' in residuals:
         print("Dipole RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
             residuals['dipole_rmse'], residuals['dipole_frac']))
