@@ -119,7 +119,7 @@ def load_kernels(args):
         if args.transpose_full_kernels:
             n_sparse_envs, n_full_envs, _, _ = tensor_kernel.shape
             tensor_kernel = tensor_kernel.transpose((0, 2, 1, 3)).reshape(
-                    (n_sparse_envs * 3, n_full_envs * 3).transpose().reshape(
+                    (n_sparse_envs * 3, n_full_envs * 3)).transpose().reshape(
                     (n_full_envs, 3, n_sparse_envs, 3)).transpose(
                     (0, 2, 1, 3))
     else:
