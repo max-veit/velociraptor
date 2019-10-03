@@ -58,7 +58,7 @@ def compute_weights(dipoles, charges,
                     scalar_weight=0, tensor_weight=0, charge_mode='none',
                     dipole_regularization=1.0, charge_regularization=1.0,
                     sparse_jitter=1E-10, print_condition_number=False,
-                    **extra_args):
+                    condition_cutoff=None, **extra_args):
     if (scalar_weight == 0) and (tensor_weight == 0):
         raise ValueError("Both weights set to zero, can't fit with no data.")
     elif ((charge_mode != 'fit') and (scalar_weight != 0)
@@ -83,7 +83,8 @@ def compute_weights(dipoles, charges,
                     dipoles, scalar_kernel_sparse,
                     scalar_kernel_transformed, regularizer,
                     sparse_jitter,
-                    print_condition=print_condition_number)
+                    print_condition=print_condition_number,
+                    condition_cutoff=condition_cutoff)
         elif scalar_weight == 0:
             tensor_kernel_transformed = np.delete(
                     tensor_kernel_transformed, slice(None, None, 4), axis=0)
@@ -91,7 +92,8 @@ def compute_weights(dipoles, charges,
                     dipoles, tensor_kernel_sparse,
                     tensor_kernel_transformed, regularizer,
                     sparse_jitter,
-                    print_condition=print_condition_number)
+                    print_condition=print_condition_number,
+                    condition_cutoff=condition_cutoff)
         else:
             raise ValueError("Can't do combined fitting without charges")
     elif charge_mode == 'fit':
@@ -100,14 +102,16 @@ def compute_weights(dipoles, charges,
                     charges, dipoles,
                     scalar_kernel_sparse, scalar_kernel_transformed,
                     regularizer, sparse_jitter,
-                    print_condition=print_condition_number)
+                    print_condition=print_condition_number,
+                    condition_cutoff=condition_cutoff)
         else:
             return solvers.compute_weights_two_model(
                         charges, dipoles,
                         scalar_kernel_sparse, scalar_kernel_transformed,
                         tensor_kernel_sparse, tensor_kernel_transformed,
                         regularizer, sparse_jitter,
-                        print_condition=print_condition_number)
+                        print_condition=print_condition_number,
+                        condition_cutoff=condition_cutoff)
     elif charge_mode == 'lagrange':
         if tensor_weight != 0:
             raise ValueError("Charge constraints not yet implemented together "
@@ -115,7 +119,7 @@ def compute_weights(dipoles, charges,
         weights = solvers.compute_weights_charge_constrained(
                 charges, dipoles,
                 scalar_kernel_sparse, scalar_kernel_transformed, regularizer,
-                sparse_jitter)
+                sparse_jitter, condition_cutoff=condition_cutoff)
         return weights
     else:
         raise ValueError("Unrecognized charge mode '%s'".format(charge_mode))

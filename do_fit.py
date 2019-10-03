@@ -95,6 +95,12 @@ parser.add_argument(
     '-pc', '--print-condition-number', action='store_true', help="Print the "
             "condition number of the linear system to be solved?")
 parser.add_argument(
+    '-cc', '--condition-cutoff', type=float, help="Condition-number cutoff to "
+            "use for the least-squares solver np.linalg.lstsq().  The default "
+            "(the \"new\" default of lstsq) should be sensible; otherwise try "
+            "the previous default of 10^-15 (the difference should be small "
+            "in practice).")
+parser.add_argument(
     '-mm', '--memory-map', action='store_true', help="Memory-map the larger "
             "kernels to save memory? (they will still be read in after "
             "slicing and transforming)")

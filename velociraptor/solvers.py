@@ -397,7 +397,8 @@ def compute_weights_charges(charges_train, dipoles_train,
 def compute_weights_charge_constrained(
                     charges_train, dipoles_train,
                     scalar_kernel_sparse, scalar_kernel_transformed,
-                    reg_matrix_inv_diag, sparse_jitter=1E-9):
+                    reg_matrix_inv_diag, sparse_jitter=1E-9,
+                    condition_cutoff=-1):
     """Compute the weights to find a constrained fit the given data
 
     Uses Lagrange multipliers to fit the total charges exactly.
@@ -428,6 +429,10 @@ def compute_weights_charge_constrained(
 
     Returns the weights as well as the values of the Lagrange multipliers
     """
+    if condition_cutoff != -1:
+        logger.warn("Condition number cutoff was set, but this solver does not"
+                    " currently support condition-number cutoffs.\nUsing the "
+                    "full-rank solver.")
     cov_matrix_charges = scalar_kernel_transformed[::4]
     cov_matrix_dipoles = np.delete(scalar_kernel_transformed,
         np.arange(0, scalar_kernel_transformed.shape[0], 4), axis=0)
