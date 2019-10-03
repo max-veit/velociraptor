@@ -45,10 +45,11 @@ parser.add_argument(
             help="Weight of the tensor component (point dipoles) in the model",
             required=True)
 parser.add_argument(
-    '-dm', '--dipole-per-molecule', action='store_true',
-            help="Were the dipoles normalized by the number of atoms before "
-            "fitting? (make sure this option is consistent between fit and "
-            "prediction!)")
+    '-dn', '--dipole-not-normalized',
+            action='store_false', dest='dipole_normalized',
+            help="Were the dipoles NOT normalized by the number of atoms "
+            "before fitting? (make sure this option is consistent between fit "
+            "and prediction!)")
 parser.add_argument(
     '-pr', '--print-residuals', action='store_true', help="Print the RMSE "
             "residuals of the model evaluated on the test set")
@@ -104,7 +105,7 @@ if __name__ == "__main__":
                                             tensor_kernel, args.tensor_weight)
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
-    if not dipole_per_molecule:
+    if args.dipole_normalized:
         dipoles = dipoles / natoms_list
     weights = np.load(args.weights)
     del args.dipoles

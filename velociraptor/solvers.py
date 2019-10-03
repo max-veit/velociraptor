@@ -138,7 +138,7 @@ def compute_per_atom_vector(geometries, weights, kernel_matrix):
 
 def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                       charges_test=None, return_rmse=True,
-                      intrinsic_dipole_std=None, dipole_per_molecule=False):
+                      intrinsic_dipole_std=None, dipole_normalized=True):
     """Compute the residuals for the given fit
 
     If the RMSE is requested, return the RMS of the _norm_ of the dipole
@@ -175,6 +175,9 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                     Intrinsic variation of the dipole moments to use,
                     instead of the RMS of the norm of the dipole moments
                     in 'dipole_test'
+        dipole_normalized
+                    Are the input dipoles than normalized by the number of
+                    atoms in each molecule? (default True)
 
     Return value is a dictionary of numpy arrays.  Depending on what
     is requested, one or more of the following keys will be present:
@@ -210,24 +213,24 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     else:
         dipole_residuals = residuals.reshape(n_test, 3)
     # DANGER WILL ROBINSON: These residuals are either per-molecule or
-    # normalized per atom, depending on the setting of dipole_per_molecule
+    # normalized per atom, depending on the setting of dipole_normalized
     residuals_out['dipole_residuals'] = dipole_residuals
-    residuals_out['dipole_per_molecule'] = dipole_per_molecule
+    residuals_out['dipole_normalized'] = dipole_normalized
     if return_rmse:
-        if dipole_per_molecule:
+        if dipole_normalized:
+            dipole_rmse = np.sqrt(np.sum(dipole_residuals**2) / n_test)
+        else:
             dipole_rmse = np.sqrt(np.sum((dipole_residuals.T / natoms_test)**2)
                                   / n_test)
-        else:
-            dipole_rmse = np.sqrt(np.sum(dipole_residuals**2) / n_test)
         # but the RMSEs are always per-atom
         residuals_out['dipole_rmse'] = dipole_rmse
         if intrinsic_dipole_std is None:
-            if dipole_per_molecule:
-                intrinsic_dipole_std = np.sqrt(
-                        np.sum((dipoles_test.T / natoms_test)**2) / n_test)
-            else:
+            if dipole_normalized:
                 intrinsic_dipole_std = np.sqrt(
                         np.sum(dipoles_test**2) / n_test)
+            else:
+                intrinsic_dipole_std = np.sqrt(
+                        np.sum((dipoles_test.T / natoms_test)**2) / n_test)
         residuals_out['dipole_frac'] = dipole_rmse / intrinsic_dipole_std
         if charges_included:
             charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
