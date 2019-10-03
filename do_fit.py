@@ -156,7 +156,7 @@ if __name__ == "__main__":
     del args.dipoles
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     if args.dipole_normalize:
-        dipoles = dipoles / natoms_list[:,np.newaxis]
+        dipoles = (dipoles.T / natoms_list).T
     n_descriptors = sum(natoms_list)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
      tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)

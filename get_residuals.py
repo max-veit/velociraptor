@@ -106,7 +106,7 @@ if __name__ == "__main__":
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     if args.dipole_normalized:
-        dipoles = dipoles / natoms_list[:,np.newaxis]
+        dipoles = (dipoles.T / natoms_list).T
     weights = np.load(args.weights)
     del args.dipoles
     del args.weights
