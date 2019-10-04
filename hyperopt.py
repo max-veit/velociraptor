@@ -95,12 +95,13 @@ def compute_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
 
 
 def compute_scalar_residual(n_max, l_max, atom_width, rad_r0, rad_m,
-                            dipole_reg, charge_reg, workdir=None,
-                            print_progress=True, dipole_normalize=True):
+                            dipole_reg, charge_reg, n_sparse_envs=2000,
+                            workdir=None, print_progress=True,
+                            dipole_normalize=True):
     # number of sparse envs is another convergence parameter
     compute_power_spectra(n_max, l_max, atom_width, rad_r0, rad_m,
                           ps_prefix='PS0_train', atoms_file='qm7_train.xyz',
-                          workdir=workdir, n_sparse_envs=2000)
+                          workdir=workdir, n_sparse_envs=n_sparse_envs)
     # Make sure feat sparsification uses the PS0_train values!
     # (and don't sparsify on envs)
     compute_power_spectra(n_max, l_max, atom_width, rad_r0, rad_m,
