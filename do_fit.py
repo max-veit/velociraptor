@@ -109,6 +109,11 @@ parser.add_argument(
             "the full-sparse kernels, assuming they were stored in the "
             "opposite order (MN) from the one expected (NM) (where N is full "
             "and M is sparse)")
+parser.add_argument(
+    '-tvk', '--transpose-vector-kernels', action='store_true', help="Same as
+            "-tk, but only for the (full) vector kernels.  This is a "
+            "transitional option to patch up different conventions; don't "
+            "expect it to stick around.")
 
 
 def load_kernels(args):
@@ -128,7 +133,7 @@ def load_kernels(args):
     if args.tensor_weight != 0:
         tensor_kernel_sparse = np.load(args.tensor_kernel_sparse)
         tensor_kernel = np.load(args.tensor_kernel, mmap_mode=mmap_mode)
-        if args.transpose_full_kernels:
+        if args.transpose_full_kernels or args.transpose_vector_kernels:
             n_sparse_envs, n_full_envs, _, _ = tensor_kernel.shape
             tensor_kernel = tensor_kernel.transpose((0, 2, 1, 3)).reshape(
                     (n_sparse_envs * 3, n_full_envs * 3)).transpose().reshape(
