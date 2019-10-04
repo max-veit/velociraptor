@@ -4,7 +4,9 @@
 import numpy as np
 
 from . import solvers
-from . import transform
+from .transform import (transform_envts_charge_dipoles,
+                        transform_vector_envts_charge_dipoles,
+                        transform_vector_mols_charge_dipoles)
 
 import logging
 logger = logging.getLogger(__name__)
@@ -15,20 +17,27 @@ def get_charges(geometries):
 
 
 def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
-                                  tensor_kernel_full_sparse, tensor_weight):
+                      tensor_kernel_full_sparse, tensor_weight,
+                      tensor_kernel_molecular=False,
+                      transpose_scalar_kernel=False,
+                      transpose_vector_kernel=False):
     if scalar_weight != 0:
-        scalar_kernel_transformed = transform.transform_envts_charge_dipoles(
-                geometries, scalar_kernel_full_sparse)
+        scalar_kernel_transformed = transform_envts_charge_dipoles(
+                geometries, scalar_kernel_full_sparse, transpose_scalar_kernel)
         scalar_kernel_transformed *= scalar_weight
     else:
         scalar_kernel_transformed = scalar_kernel_full_sparse
     # Assuming the spherical-to-Cartesian transformation was done elsewhere
     if tensor_weight != 0:
-        tensor_kernel_transformed = (
-                transform.transform_vector_envts_charge_dipoles(
-                    geometries, tensor_kernel_full_sparse))
+        if tensor_kernel_molecular:
+            tensor_kernel_transformed = transform_vector_mols_charge_dipoles(
+                        geometries, tensor_kernel_full_sparse,
+                        transpose_vector_kernel)
+        else:
+            tensor_kernel_transformed = transform_vector_envts_charge_dipoles(
+                        geometries, tensor_kernel_full_sparse,
+                        transpose_vector_kernel)
         tensor_kernel_transformed *= tensor_weight
-
     else:
         tensor_kernel_transformed = tensor_kernel_full_sparse
     return scalar_kernel_transformed, tensor_kernel_transformed

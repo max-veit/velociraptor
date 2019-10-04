@@ -72,23 +72,20 @@ parser.add_argument(
             "-tk, but only for the (full) vector kernels.  This is a "
             "transitional option to patch up different conventions; don't "
             "expect it to stick around.")
+parser.add_argument(
+    '-tm', '--tensor-kernel-molecular', action='store_true', help="Is the full"
+            " tensor kernel stored in molecular, rather than atomic, format? "
+            "(i.e. are they pre-summed over the atoms in a molecule?) "
+            "Note this option is compatible with -tk and -tvk.")
 
 
 def load_kernels(args):
     if args.scalar_weight != 0:
         scalar_kernel = np.load(args.scalar_kernel)
-        if args.transpose_full_kernels:
-            scalar_kernel = scalar_kernel.transpose()
     else:
         scalar_kernel = np.array([])
     if args.tensor_weight != 0:
         tensor_kernel = np.load(args.tensor_kernel)
-        if args.transpose_full_kernels or args.transpose_vector_kernels:
-            n_sparse_envs, n_full_envs, _, _ = tensor_kernel.shape
-            tensor_kernel = tensor_kernel.transpose((0, 2, 1, 3)).reshape(
-                    (n_sparse_envs * 3, n_full_envs * 3)).transpose().reshape(
-                    (n_full_envs, 3, n_sparse_envs, 3)).transpose(
-                    (0, 2, 1, 3))
     else:
         tensor_kernel = np.array([])
     del args.scalar_kernel
@@ -104,10 +101,11 @@ if __name__ == "__main__":
     scalar_kernel, tensor_kernel = load_kernels(args)
     geometries = ase.io.read(args.geometries, ':')
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
-    (scalar_kernel_transformed,
-     tensor_kernel_transformed) = transform_kernels(
-                                geometries, scalar_kernel, args.scalar_weight,
-                                            tensor_kernel, args.tensor_weight)
+    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+            geometries, scalar_kernel, args.scalar_weight,
+            tensor_kernel, args.tensor_weight, args.tensor_kernel_molecular,
+            args.transpose_full_kernels,
+            (args.transpose_full_kernels or args.transpose_vector_kernels))
     charges = get_charges(geometries)
     dipoles = np.loadtxt(args.dipoles)
     if args.dipole_normalized:
