@@ -1,20 +1,22 @@
-#!/usr/bin/env python
+"""Interface to SOAPFAST to compute power spectra and kernels
+
+Since SOAPFAST is currently py2k-only, the interface needs to happen at
+the process level; this is not much of a problem in practice.
+"""
+
 
 import logging
 import os
 import subprocess
 
 import ase.io
-import math
 import numpy as np
-import scipy.optimize
 
-from velociraptor.fitutils import (transform_kernels, transform_sparse_kernels,
-                                   compute_weights, compute_residuals,
-                                   get_charges)
+from .fitutils import (transform_kernels, transform_sparse_kernels,
+                       compute_weights, compute_residuals, get_charges)
 
-PY2_EXEC = "/home/veit/miniconda3/envs/py2-compat/bin/python2"
-SOAPFAST_PATH = "/home/veit/SOAPFAST/soapfast"
+# PY2_EXEC = "/home/veit/miniconda3/envs/py2-compat/bin/python2"
+# SOAPFAST_PATH = "/home/veit/SOAPFAST/soapfast"
 logging.basicConfig()
 LOGGER = logging.getLogger(__name__)
 
@@ -178,33 +180,3 @@ def compute_scalar_residual(n_max, l_max, atom_width, rad_r0, rad_m,
     return resids['dipole_rmse']
 
 
-def compute_cv_error(params, n_max, l_max, workdir=None, cv_basename='cv'):
-    atom_width, rad_r0, rad_m, dipole_reg_log, charge_reg_log = params
-    dipole_reg = math.pow(10, dipole_reg_log)
-    charge_reg = math.pow(10, charge_reg_log)
-    rmse_sum = 0
-    LOGGER.info("Trying params: " + str(params))
-    with open(os.path.join(workdir, "opt_points.txt"), 'ab') as ptsf:
-        np.savetxt(ptsf, params[np.newaxis, :])
-    for cv_idx in range(4):
-        workdir_cv = os.path.join(workdir, '{:s}_{:d}'.format(
-            cv_basename, cv_idx))
-        rmse_sum += compute_scalar_residual(
-            n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg, charge_reg,
-            workdir=workdir_cv)
-    LOGGER.info("CV residual is: {:.4f}".format(rmse_sum / 4.0))
-    return rmse_sum / 4.0
-
-
-if __name__ == "__main__":
-    LOGGER.setLevel(logging.INFO)
-    result = scipy.optimize.minimize(
-        compute_cv_error, [0.5, 3.0, 2.0, -2, 2],
-        args=(8, 6, "/scratch/veit/dipoles"),
-        method="Nelder-Mead",
-        options={'initial_simplex': np.loadtxt(
-            "/scratch/veit/dipoles/params_simplex.txt")}
-    )
-    print("Success? {}".format(result.success))
-    print(result.message)
-    print(result.x)
