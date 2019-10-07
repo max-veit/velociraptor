@@ -4,6 +4,7 @@
 
 import argparse
 import logging
+import os
 
 import ase.io
 import numpy as np
@@ -68,7 +69,7 @@ parser.add_argument(
             "opposite order (MN) from the one expected (NM) (where N is full "
             "and M is sparse)")
 parser.add_argument(
-    '-tvk', '--transpose-vector-kernels', action='store_true', help="Same as
+    '-tvk', '--transpose-vector-kernels', action='store_true', help="Same as "
             "-tk, but only for the (full) vector kernels.  This is a "
             "transitional option to patch up different conventions; don't "
             "expect it to stick around.")
@@ -107,7 +108,15 @@ if __name__ == "__main__":
             args.transpose_full_kernels,
             (args.transpose_full_kernels or args.transpose_vector_kernels))
     charges = get_charges(geometries)
-    dipoles = np.loadtxt(args.dipoles)
+    dipole_fext = os.path.splitext(args.dipoles)[1]
+    if dipole_fext == '.npy':
+        dipoles = np.load(args.dipoles)
+    elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
+        dipoles = np.loadtxt(args.dipoles)
+    else:
+        logger.warn("Dipoles file has no filename extension; assuming "
+                    "plain text.")
+        dipoles = np.loadtxt(args.dipoles)
     if args.dipole_normalized:
         dipoles = (dipoles.T / natoms_list).T
     weights = np.load(args.weights)

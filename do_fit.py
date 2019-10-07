@@ -4,7 +4,7 @@
 
 import argparse
 import logging
-import sys
+import os
 
 import ase.io
 import numpy as np
@@ -95,7 +95,8 @@ parser.add_argument(
     '-pc', '--print-condition-number', action='store_true', help="Print the "
             "condition number of the linear system to be solved?")
 parser.add_argument(
-    '-cc', '--condition-cutoff', type=float, help="Condition-number cutoff to "
+    '-cc', '--condition-cutoff', type=float, metavar='rcond',
+            help="Condition-number cutoff to "
             "use for the least-squares solver np.linalg.lstsq().  The default "
             "(the \"new\" default of lstsq) should be sensible; otherwise try "
             "the previous default of 10^-15 (the difference should be small "
@@ -110,7 +111,7 @@ parser.add_argument(
             "opposite order (MN) from the one expected (NM) (where N is full "
             "and M is sparse)")
 parser.add_argument(
-    '-tvk', '--transpose-vector-kernels', action='store_true', help="Same as
+    '-tvk', '--transpose-vector-kernels', action='store_true', help="Same as "
             "-tk, but only for the (full) vector kernels.  This is a "
             "transitional option to patch up different conventions; don't "
             "expect it to stick around.")
@@ -154,7 +155,15 @@ if __name__ == "__main__":
         geometries = ase.io.read(args.geometries, slice(None))
         n_train = len(geometries)
     charges = get_charges(geometries)
-    dipoles = np.loadtxt(args.dipoles)[:n_train]
+    dipole_fext = os.path.splitext(args.dipoles)[1]
+    if dipole_fext == '.npy':
+        dipoles = np.load(args.dipoles)[:n_train]
+    elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
+        dipoles = np.loadtxt(args.dipoles)[:n_train]
+    else:
+        logger.warn("Dipoles file has no filename extension; assuming "
+                    "plain text.")
+        dipoles = np.loadtxt(args.dipoles)[:n_train]
     del args.dipoles
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     if args.dipole_normalize:
@@ -163,7 +172,15 @@ if __name__ == "__main__":
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
      tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
     scalar_kernel_full_sparse = scalar_kernel_full_sparse[:n_descriptors]
-    tensor_kernel_full_sparse = tensor_kernel_full_sparse[:n_descriptors]
+    #TODO move some of this logic into the transform functions?
+    if args.tensor_kernel_molecular:
+        n_vector = n_train
+    else:
+        n_vector = n_descriptors
+    if not (args.transpose_full_kernels or args.transpose_vector_kernels):
+        tensor_kernel_full_sparse = tensor_kernel_full_sparse[:n_vector]
+    else:
+        tensor_kernel_full_sparse = tensor_kernel_full_sparse[:, :n_vector]
     scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
         geometries, scalar_kernel_sparse, args.scalar_weight,
                     tensor_kernel_sparse, args.tensor_weight)
