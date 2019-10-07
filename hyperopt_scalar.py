@@ -6,9 +6,13 @@ import math
 import os
 import sys
 
+import numpy as np
 import scipy.optimize
 
-from velociraptor.kerneltools import compute_scalar_residual
+from velociraptor.kerneltools import compute_residual
+
+logging.basicConfig()
+LOGGER = logging.getLogger(__name__)
 
 
 def compute_cv_error(params, n_max, l_max, workdir=None, cv_basename='cv'):
