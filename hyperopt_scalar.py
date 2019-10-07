@@ -22,9 +22,10 @@ def compute_cv_error(params, n_max, l_max, workdir=None, cv_basename='cv'):
     for cv_idx in range(4):
         workdir_cv = os.path.join(workdir, '{:s}_{:d}'.format(
             cv_basename, cv_idx))
-        rmse_sum += compute_scalar_residual(
+        rmse_sum += compute_residual(
             n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg, charge_reg,
-            workdir=workdir_cv, recompute_kernels=True)
+            weight_scalar=1.0, weight_tensor=0.0,
+            workdir=workdir_cv, recompute_kernels=True, dipole_normalize=False)
     LOGGER.info("CV residual is: {:.4f}".format(rmse_sum / 4.0))
     return rmse_sum / 4.0
 

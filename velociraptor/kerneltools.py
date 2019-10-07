@@ -129,13 +129,54 @@ def recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
                           zeta=zeta, kernel_name='K0_TM', workdir=workdir)
 
 
-def compute_scalar_residual(n_max, l_max, atom_width, rad_r0, rad_m,
-                            dipole_reg, charge_reg, n_sparse_envs=2000,
-                            n_sparse_components=500, workdir=None,
-                            dipole_normalize=True, recompute_kernels=True):
+#TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
+#     just in a different guise with different arguments (which are really just
+#     presets).  Fix?
+def load_train_kernels(workdir, weight_scalar, weight_tensor):
+    if scalar_weight != 0.0:
+        scalar_kernel_sparse = np.load(os.path.join(workdir, 'K0_MM.npy'))
+        scalar_kernel_full_sparse = np.load(os.path.join(workdir, 'K0_NM.npy'))
+    else:
+        scalar_kernel_sparse = np.array([])
+        scalar_kernel_full_sparse = np.array([])
+    if tensor_weight != 0.0:
+        tensor_kernel_sparse = np.load(os.path.join(workdir, 'Kvec_MM.npy'))
+        tensor_kernel_full_sparse = np.load(os.path.join(workdir,
+                                                         'Kvec_NM.npy'))
+    else:
+        tensor_kernel_sparse = np.array([])
+        tensor_kernel_full_sparse = np.array([])
+    return (scalar_kernel_sparse, scalar_kernel_full_sparse,
+            tensor_kernel_sparse, tensor_kernel_full_sparse)
+
+
+def load_test_kernels(workdir, weight_scalar, weight_tensor):
+    if scalar_weight != 0.0:
+        scalar_kernel_full_sparse = np.load(os.path.join(workdir, 'K0_TM.npy'))
+    else:
+        scalar_kernel_full_sparse = np.array([])
+    if tensor_weight != 0.0:
+        tensor_kernel_full_sparse = np.load(os.path.join(workdir,
+                                                         'Kvec_TM.npy'))
+    else:
+        tensor_kernel_full_sparse = np.array([])
+    return scalar_kernel_full_sparse, tensor_kernel_full_sparse
+
+
+def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
+                     charge_reg, weight_scalar=0.0, weight_tensor=0.0,
+                     n_sparse_envs=2000, n_sparse_components=500, workdir=None,
+                     dipole_normalize=True, recompute_kernels=True):
+
+    if (weight_scalar == 0.0) and (weight_tensor == 0.0):
+        raise ValueError("Can't have both scalar and tensor weights set "
+                         "to zero")
     if recompute_kernels:
+        if weight_tensor != 0.0:
+            raise ValueError("Recomputing vector kernels is not yet supported")
         recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
                                  n_sparse_envs, n_sparse_components, workdir)
+
     # compute weights (velociraptor)
     dipoles_train = np.load(os.path.join(workdir, 'dipoles_train.npy'))
     geoms_train = ase.io.read(os.path.join(workdir, 'qm7_train.xyz'), ':')
@@ -144,17 +185,22 @@ def compute_scalar_residual(n_max, l_max, atom_width, rad_r0, rad_m,
                                  for geom in geoms_train])
         dipoles_train = dipoles_train / natoms_train[:, np.newaxis]
     charges_train = get_charges(geoms_train)
-    scalar_kernel_sparse = np.load(os.path.join(workdir, 'K0_MM.npy'))
-    scalar_kernel_full_sparse = np.load(os.path.join(workdir, 'K0_NM.npy'))
-    scalar_kernel_transformed, _ = transform_kernels(
-            geoms_train, scalar_kernel_full_sparse, 1.0, np.array([]), 0.0)
+    (scalar_kernel_sparse, scalar_kernel_full_sparse,
+     tensor_kernel_sparse, tensor_kernel_full_sparse) = load_train_kernels(
+             workdir, weight_scalar, weight_tensor)
+    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+            geoms_train, scalar_kernel_full_sparse, weight_scalar,
+            tensor_kernel_full_sparse, weight_tensor)
     del scalar_kernel_full_sparse
-    scalar_kernel_sparse, _ = transform_sparse_kernels(
-            geoms_train, scalar_kernel_sparse, 1.0, np.array([]), 0.0)
+    del tensor_kernel_full_sparse
+    scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
+            geoms_train, scalar_kernel_sparse, weight_scalar,
+            tensor_kernel_sparse, tensor_kernel)
     scalar_weights = compute_weights(
             dipoles_train, charges_train,
             scalar_kernel_sparse, scalar_kernel_transformed,
-            np.array([]), np.array([]), scalar_weight=1.0, tensor_weight=0.0,
+            tensor_kernel_sparse, tensor_kernel_transformed,
+            scalar_weight=weight_scalar, tensor_weight=weight_tensor,
             charge_mode='fit',
             dipole_regularization=dipole_reg, charge_regularization=charge_reg,
             sparse_jitter=0.0)
@@ -166,15 +212,19 @@ def compute_scalar_residual(n_max, l_max, atom_width, rad_r0, rad_m,
     if dipole_normalize:
         dipoles_test = dipoles_test / natoms_test[:, np.newaxis]
     charges_test = get_charges(geoms_test)
-    scalar_kernel_test_train = np.load(os.path.join(workdir, 'K0_TM.npy'))
-    scalar_kernel_test_transformed, _ = transform_kernels(
-            geoms_test, scalar_kernel_test_train, 1.0, np.array([]), 0.0)
+    scalar_kernel_test_train, tensor_kernel_test_train = load_test_kernels(
+            workdir, weight_scalar, weight_tensor)
+    (scalar_kernel_test_transformed,
+     tensor_kernel_test_transformed) = transform_kernels(
+            geoms_test, scalar_kernel_test_train, weight_scalar,
+            tensor_kernel_test_train, weight_tensor)
     del scalar_kernel_test_train
+    del tensor_kernel_test_train
     resids = compute_residuals(
             scalar_weights, dipoles_test, charges_test, natoms_test,
-            scalar_kernel_test_transformed, np.array([]),
-            scalar_weight=1.0, tensor_weight=0.0, charge_mode='fit',
-            dipole_normalized=dipole_normalize)
+            scalar_kernel_test_transformed, tensor_kernel_test_transformed,
+            scalar_weight=weight_scalar, tensor_weight=weight_tensor,
+            charge_mode='fit', dipole_normalized=dipole_normalize)
     LOGGER.info("Finished computing test residual: {:.6g}".format(
         resids['dipole_rmse']))
     return resids['dipole_rmse']
