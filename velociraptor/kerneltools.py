@@ -197,7 +197,7 @@ def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
         else:
             geoms_train.append(geom)
     idces_train = np.setdiff1d(np.arange(len(geoms)), idces_test, True)
-    idces_all = np.arange(len(geoms)*4).reshape((4, -1))
+    idces_all = np.arange(len(geoms)*4).reshape((-1, 4))
     idces_charge_dipole_test = idces_all[idces_test].flat
     idces_charge_dipole_train = idces_all[idces_train].flat
     if scalar_kernel_transformed.shape != (0,):
@@ -388,15 +388,14 @@ def compute_cv_residual(
         write_residuals = (
                 os.path.join(workdir, 'cv_{:d}_residuals.npz'.format(cv_num))
                 if write_results else None)
-        resids = compute_residuals(
+        resid = compute_residuals(
                 weights, dipoles_test, charges_test, natoms_test,
                 scalar_kernel_test, tensor_kernel_test,
                 weight_scalar, weight_tensor, charge_mode='fit',
                 dipole_normalized=dipole_normalize,
                 write_residuals=write_residuals)['dipole_rmse']
-        LOGGER.info("Finished computing test residual: {:.6g}".format(
-            resids['dipole_rmse']))
-        rmse_sum +=  resids['dipole_rmse']
+        LOGGER.info("Finished computing test residual: {:.6g}".format(resid))
+        rmse_sum += resid
     return rmse_sum / len(cv_idces_sets)
 
 
