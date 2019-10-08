@@ -1,5 +1,7 @@
 """Interface to SOAPFAST to compute power spectra and kernels
 
+With some utilities for automating the fitting process for use in scripts
+
 Since SOAPFAST is currently py2k-only, the interface needs to happen at
 the process level; this is not much of a problem in practice.
 """
@@ -133,13 +135,13 @@ def recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
 #     just in a different guise with different arguments (which are really just
 #     presets).  Fix?
 def load_train_kernels(workdir, weight_scalar, weight_tensor):
-    if scalar_weight != 0.0:
+    if weight_scalar != 0.0:
         scalar_kernel_sparse = np.load(os.path.join(workdir, 'K0_MM.npy'))
         scalar_kernel_full_sparse = np.load(os.path.join(workdir, 'K0_NM.npy'))
     else:
         scalar_kernel_sparse = np.array([])
         scalar_kernel_full_sparse = np.array([])
-    if tensor_weight != 0.0:
+    if weight_tensor != 0.0:
         tensor_kernel_sparse = np.load(os.path.join(workdir, 'Kvec_MM.npy'))
         tensor_kernel_full_sparse = np.load(os.path.join(workdir,
                                                          'Kvec_NM.npy'))
