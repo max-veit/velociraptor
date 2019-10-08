@@ -102,9 +102,9 @@ def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
     subprocess.run(kernel_args)
 
 
-def recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
-                             n_sparse_envs=2000, n_sparse_components=500,
-                             workdir=None):
+def recompute_scalar_test_train_kernels(
+        n_max, l_max, atom_width, rad_r0, rad_m,
+        n_sparse_envs=2000, n_sparse_components=500, workdir=None):
     # number of sparse envs is another convergence parameter
     compute_scalar_power_spectra(
             n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_train',
@@ -129,6 +129,25 @@ def recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
     # test-train(sparse)
     compute_scalar_kernel('PS0_test_atomic.npy', 'PS0_train_atomic_sparse.npy',
                           zeta=zeta, kernel_name='K0_TM', workdir=workdir)
+
+
+#TODO merge with above
+def recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m, workdir,
+                             n_sparse_envs=2000, n_sparse_components=500,
+                             atoms_filename='qm7_train.xyz'):
+    compute_scalar_power_spectra(
+            n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_full',
+            atoms_file=atoms_filename, workdir=workdir,
+            n_sparse_envs=n_sparse_envs,
+            n_sparse_components=n_sparse_components)
+    zeta = 2 # possibly another parameter to gridsearch
+    # sparse-sparse
+    compute_scalar_kernel('PS0_full_atomic_sparse.npy', kernel_name='K0_MM',
+                          zeta=zeta, workdir=workdir)
+    # full-sparse
+    compute_scalar_kernel(
+            'PS0_full_atomic.npy', 'PS0_full_atomic_sparse.npy', zeta=zeta,
+            kernel_name='K0_NM', workdir=workdir)
 
 
 #TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
@@ -230,13 +249,23 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                      n_sparse_envs=2000, n_sparse_components=500,
                      dipole_normalize=True, recompute_kernels=False,
                      cv_idces_sets=None):
+    # hardcoded for now, sorry (not sorry)
+    atoms_filename_train = 'qm7_train.xyz'
+    dipoles_filename_train = 'dipoles_train.npy'
     if recompute_kernels:
         if weight_tensor != 0.0:
             raise ValueError("Recomputing vector kernels is not yet supported")
-        recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
-                                 n_sparse_envs, n_sparse_components, workdir)
-    dipoles_train = np.load(os.path.join(workdir, 'dipoles_train.npy'))
-    geoms_train = ase.io.read(os.path.join(workdir, 'qm7_train.xyz'), ':')
+        if cv_idces_sets is None:
+            recompute_scalar_test_train_kernels(
+                    n_max, l_max, atom_width, rad_r0, rad_m,
+                    n_sparse_envs, n_sparse_components, workdir)
+        else:
+            recompute_scalar_kernels(
+                    n_max, l_max, atom_width, rad_r0, rad_m,
+                    n_sparse_envs, n_sparse_components, workdir,
+                    atoms_filename=atoms_filename_train)
+    dipoles_train = np.load(os.path.join(workdir, dipoles_filename_train))
+    geoms_train = ase.io.read(os.path.join(workdir, atoms_filename_train), ':')
     if dipole_normalize:
         natoms_train = np.array([geom.get_number_of_atoms()
                                  for geom in geoms_train])
