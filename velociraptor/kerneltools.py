@@ -163,6 +163,35 @@ def load_test_kernels(workdir, weight_scalar, weight_tensor):
     return scalar_kernel_full_sparse, tensor_kernel_full_sparse
 
 
+def infer_kernel_convention(kernel_shape, n_mol, n_sparse_envs):
+    # defaults
+    transposed = False
+    molecular = False
+    if kernel_shape[0] == n_sparse_envs:
+        if kernel_shape[1] == n_sparse_envs:
+            LOGGER.warn(
+                "Cannot infer whether kernel is transposed. (Are you sure "
+                "this is the full-sparse and not the sparse-sparse kernel?) "
+                "Using the default of False (kernel is NM-shaped).")
+        elif kernel_shape[1] == n_mol:
+            LOGGER.info("Assuming kernel is molecular and transposed.")
+            transposed = True
+            molecular = True
+        else:
+            LOGGER.info("Assuming kernel is atomic and transposed.")
+            transposed = True
+    elif kernel_shape[1] == n_sparse_envs:
+        if kernel_shape[0] == n_mol:
+            LOGGER.info("Assuming kernel is molecular and _not_ transposed.")
+            molecular = True
+        else:
+            LOGGER.info("Assuming kernel is atomic and _not_ transposed.")
+    else:
+        LOGGER.warn("Kernel shape: " + str(kernel_shape) + "unrecognized and "
+                    "likely wrong! Using default settings, but expect shape "
+                    "errors later on.")
+
+
 def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                      charge_reg, weight_scalar=0.0, weight_tensor=0.0,
                      n_sparse_envs=2000, n_sparse_components=500, workdir=None,
@@ -187,10 +216,16 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
     charges_train = get_charges(geoms_train)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
      tensor_kernel_sparse, tensor_kernel_full_sparse) = load_train_kernels(
-             workdir, weight_scalar, weight_tensor)
+            workdir, weight_scalar, weight_tensor)
+    (tensor_kernel_transposed,
+     tensor_kernel_molecular) = infer_kernel_convention(
+            tensor_kernel_full_sparse.shape, len(geoms_train), n_sparse_envs)
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
             geoms_train, scalar_kernel_full_sparse, weight_scalar,
-            tensor_kernel_full_sparse, weight_tensor)
+            tensor_kernel_full_sparse, weight_tensor,
+            vector_kernel_molecular=tensor_kernel_molecular,
+            transpose_scalar_kernel=False,
+            transpose_vector_kernel=tensor_kernel_transposed)
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
     scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
@@ -214,10 +249,16 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
     charges_test = get_charges(geoms_test)
     scalar_kernel_test_train, tensor_kernel_test_train = load_test_kernels(
             workdir, weight_scalar, weight_tensor)
+    (tensor_kernel_transposed,
+     tensor_kernel_molecular) = infer_kernel_convention(
+            tensor_kernel_test_train.shape, len(geoms_test), n_sparse_envs)
     (scalar_kernel_test_transformed,
      tensor_kernel_test_transformed) = transform_kernels(
             geoms_test, scalar_kernel_test_train, weight_scalar,
-            tensor_kernel_test_train, weight_tensor)
+            tensor_kernel_test_train, weight_tensor,
+            vector_kernel_molecular=tensor_kernel_molecular,
+            transpose_scalar_kernel=False,
+            transpose_vector_kernel=tensor_kernel_transposed)
     del scalar_kernel_test_train
     del tensor_kernel_test_train
     resids = compute_residuals(
