@@ -191,7 +191,7 @@ def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
                 geoms, dipoles, charges, idces_test):
     geoms_test = []
     geoms_train = []
-    for idx, geom in geoms:
+    for idx, geom in enumerate(geoms):
         if idx in idces_test:
             geoms_test.append(geom)
         else:
