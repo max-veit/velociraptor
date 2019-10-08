@@ -49,7 +49,7 @@ def compute_scalar_power_spectra(
     if feat_sparsefile is not None:
         ps_args.extend(['-sf', os.path.join(workdir, feat_sparsefile)])
     LOGGER.info("Running: " + ' '.join(ps_args))
-    subprocess.run(ps_args)
+    subprocess.run(ps_args, check=True)
 
     # ATOMIC POWER spectra!
     atomic_ps_args = [
@@ -61,7 +61,7 @@ def compute_scalar_power_spectra(
         '-o', os.path.join(workdir, ps_prefix + '_atomic')
     ]
     LOGGER.info("Running: " + ' '.join(atomic_ps_args))
-    subprocess.run(atomic_ps_args)
+    subprocess.run(atomic_ps_args, check=True)
 
     # sparsify kernels (soapfast)
     if (n_sparse_envs is not None) and (n_sparse_envs > 0):
@@ -75,7 +75,7 @@ def compute_scalar_power_spectra(
             '-a', os.path.join(workdir, ps_prefix + '_atomic_sparse')
         ]
         LOGGER.info("Running: " + ' '.join(fps_args))
-        subprocess.run(fps_args)
+        subprocess.run(fps_args, check=True)
 
 
 def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
@@ -99,7 +99,7 @@ def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
         '-o', os.path.join(workdir, kernel_name)
     ])
     LOGGER.info("Running: " + ' '.join(kernel_args))
-    subprocess.run(kernel_args)
+    subprocess.run(kernel_args, check=True)
 
 
 def recompute_scalar_test_train_kernels(
@@ -158,18 +158,18 @@ def load_kernels(workdir, weight_scalar, weight_tensor, full_name='NM',
     if weight_scalar != 0.0:
         if load_sparse:
             scalar_kernel_sparse = np.load(
-                    os.path.join(workdir, 'K0_{:s}.npy'.format(sparse_name))
+                    os.path.join(workdir, 'K0_{:s}.npy'.format(sparse_name)))
         scalar_kernel_full_sparse = np.load(
-                os.path.join(workdir, 'K0_{:s}.npy'.format(full_name))
+                os.path.join(workdir, 'K0_{:s}.npy'.format(full_name)))
     else:
         scalar_kernel_sparse = np.array([])
         scalar_kernel_full_sparse = np.array([])
     if weight_tensor != 0.0:
         if load_sparse:
             tensor_kernel_sparse = np.load(
-                    os.path.join(workdir, 'Kvec_{:s}.npy'.format(sparse_name))
+                    os.path.join(workdir, 'Kvec_{:s}.npy'.format(sparse_name)))
         tensor_kernel_full_sparse = np.load(
-                os.path.join(workdir, 'Kvec_{:s}.npy'.format(full_name))
+                os.path.join(workdir, 'Kvec_{:s}.npy'.format(full_name)))
     else:
         tensor_kernel_sparse = np.array([])
         tensor_kernel_full_sparse = np.array([])
@@ -192,7 +192,7 @@ def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
     geoms_test = []
     geoms_train = []
     for idx, geom in geoms:
-        if idx in idces_test_mol:
+        if idx in idces_test:
             geoms_test.append(geom)
         else:
             geoms_train.append(geom)
@@ -331,8 +331,8 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
     del tensor_kernel_full_sparse
     if load_sparse:
         scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
-                geoms_train, scalar_kernel_sparse, weight_scalar,
-                tensor_kernel_sparse, tensor_kernel)
+                geoms, scalar_kernel_sparse, weight_scalar,
+                tensor_kernel_sparse, weight_tensor)
         return (scalar_kernel_sparse, scalar_kernel_transformed,
                 tensor_kernel_sparse, tensor_kernel_transformed)
     else:
@@ -357,7 +357,7 @@ def compute_cv_residual(
     for cv_num, cv_idces in enumerate(cv_idces_sets):
         cv_test, cv_train = do_cv_split(scalar_kernel_transformed,
                                         tensor_kernel_transformed,
-                                        geoms, dipoles, cv_idces)
+                                        geoms, dipoles, charges, cv_idces)
         (dipoles_train, charges_train, geoms_train,
          scalar_kernel_train, tensor_kernel_train) = cv_train
         weights = compute_weights(
@@ -396,7 +396,7 @@ def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
         dipoles_test = dipoles_test / natoms_test[:, np.newaxis]
     charges_test = get_charges(geoms_test)
     (scalar_kernel_test_transformed,
-     tensor_kernel_test_transformed = load_transform_kernels(
+     tensor_kernel_test_transformed) = load_transform_kernels(
          workdir, geoms_test, weight_scalar, weight_tensor, load_sparse=False,
          full_kernel_name='TM')
     resids = compute_residuals(
@@ -407,5 +407,4 @@ def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
     LOGGER.info("Finished computing test residual: {:.6g}".format(
         resids['dipole_rmse']))
     return resids['dipole_rmse']
-
 

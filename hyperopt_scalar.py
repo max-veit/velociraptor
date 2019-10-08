@@ -42,7 +42,6 @@ def compute_cv_error(params, n_max, l_max, workdir, cv_basename='cv'):
     atom_width, rad_r0, rad_m, dipole_reg_log, charge_reg_log = params
     dipole_reg = math.pow(10, dipole_reg_log)
     charge_reg = math.pow(10, charge_reg_log)
-    rmse_sum = 0
     LOGGER.info("Trying params: " + str(params))
     with open(os.path.join(workdir, "opt_points.txt"), 'ab') as ptsf:
         np.savetxt(ptsf, params[np.newaxis, :])
@@ -66,12 +65,12 @@ if __name__ == "__main__":
         workdir = os.getcwd()
     else:
         workdir = sys.argv[2]
-    result = scipy.optimize.minimize(
+    opt_result = scipy.optimize.minimize(
         compute_cv_error, [0.5, 3.0, 2.0, -2, 2],
         args=(8, 6, workdir),
         method="Nelder-Mead",
         options={'initial_simplex': np.loadtxt(sys.argv[1])}
     )
-    print("Success? {}".format(result.success))
-    print(result.message)
-    print(result.x)
+    print("Success? {}".format(opt_result.success))
+    print(opt_result.message)
+    print(opt_result.x)
