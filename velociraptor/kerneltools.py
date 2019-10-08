@@ -261,8 +261,8 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                     n_sparse_envs, n_sparse_components, workdir)
         else:
             recompute_scalar_kernels(
-                    n_max, l_max, atom_width, rad_r0, rad_m,
-                    n_sparse_envs, n_sparse_components, workdir,
+                    n_max, l_max, atom_width, rad_r0, rad_m, workdir,
+                    n_sparse_envs, n_sparse_components,
                     atoms_filename=atoms_filename_train)
     dipoles_train = np.load(os.path.join(workdir, dipoles_filename_train))
     geoms_train = ase.io.read(os.path.join(workdir, atoms_filename_train), ':')
