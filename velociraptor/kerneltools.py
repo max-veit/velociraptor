@@ -134,35 +134,62 @@ def recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
 #TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
 #     just in a different guise with different arguments (which are really just
 #     presets).  Fix?
-def load_train_kernels(workdir, weight_scalar, weight_tensor):
+def load_kernels(workdir, weight_scalar, weight_tensor, full_name='NM',
+                 load_sparse=True, sparse_name='MM'):
     if weight_scalar != 0.0:
-        scalar_kernel_sparse = np.load(os.path.join(workdir, 'K0_MM.npy'))
-        scalar_kernel_full_sparse = np.load(os.path.join(workdir, 'K0_NM.npy'))
+        if load_sparse:
+            scalar_kernel_sparse = np.load(
+                    os.path.join(workdir, 'K0_{:s}.npy'.format(sparse_name))
+        scalar_kernel_full_sparse = np.load(
+                os.path.join(workdir, 'K0_{:s}.npy'.format(full_name))
     else:
         scalar_kernel_sparse = np.array([])
         scalar_kernel_full_sparse = np.array([])
     if weight_tensor != 0.0:
-        tensor_kernel_sparse = np.load(os.path.join(workdir, 'Kvec_MM.npy'))
-        tensor_kernel_full_sparse = np.load(os.path.join(workdir,
-                                                         'Kvec_NM.npy'))
+        if load_sparse:
+            tensor_kernel_sparse = np.load(
+                    os.path.join(workdir, 'Kvec_{:s}.npy'.format(sparse_name))
+        tensor_kernel_full_sparse = np.load(
+                os.path.join(workdir, 'Kvec_{:s}.npy'.format(full_name))
     else:
         tensor_kernel_sparse = np.array([])
         tensor_kernel_full_sparse = np.array([])
-    return (scalar_kernel_sparse, scalar_kernel_full_sparse,
-            tensor_kernel_sparse, tensor_kernel_full_sparse)
+    if load_sparse:
+        return (scalar_kernel_sparse, scalar_kernel_full_sparse,
+                tensor_kernel_sparse, tensor_kernel_full_sparse)
+    else:
+        return scalar_kernel_full_sparse, tensor_kernel_full_sparse
 
 
 def load_test_kernels(workdir, weight_scalar, weight_tensor):
-    if scalar_weight != 0.0:
-        scalar_kernel_full_sparse = np.load(os.path.join(workdir, 'K0_TM.npy'))
-    else:
-        scalar_kernel_full_sparse = np.array([])
-    if tensor_weight != 0.0:
-        tensor_kernel_full_sparse = np.load(os.path.join(workdir,
-                                                         'Kvec_TM.npy'))
-    else:
-        tensor_kernel_full_sparse = np.array([])
-    return scalar_kernel_full_sparse, tensor_kernel_full_sparse
+    return load_kernels(workdir, weight_scalar, weight_tensor,
+                        full_name='TM', load_sparse=False)
+
+
+#TODO package the cv-split (or the data and kernels necessary for fitting, more
+#     generally) into some sort of object
+def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
+                geoms, dipoles, charges, idces_test):
+    geoms_test = []
+    geoms_train = []
+    for idx, geom in geoms:
+        if idx in idces_test_mol:
+            geoms_test.append(geom)
+        else:
+            geoms_train.append(geom)
+    idces_train = np.setdiff1d(np.arange(len(geoms)), idces_test, True)
+    scalar_kernel_test = scalar_kernel_transformed[idces_test, :]
+    scalar_kernel_train = scalar_kernel_transformed[idces_train, :]
+    tensor_kernel_test = tensor_kernel_transformed[idces_test, :]
+    tensor_kernel_train = tensor_kernel_transformed[idces_train, :]
+    dipoles_test = dipoles[idces_test, :]
+    dipoles_train = dipoles[idces_train, :]
+    charges_test = charges[idces_test, :]
+    charges_train = charges[idces_train, :]
+    return ((dipoles_test, charges_test, geoms_test,
+             scalar_kernel_test, tensor_kernel_test),
+            (dipoles_train, charges_train, geoms_train,
+             scalar_kernel_train, tensor_kernel_train))
 
 
 def infer_kernel_convention(kernel_shape, n_mol, n_sparse_envs):
@@ -192,23 +219,22 @@ def infer_kernel_convention(kernel_shape, n_mol, n_sparse_envs):
         LOGGER.warn("Kernel shape: " + str(kernel_shape) + "unrecognized and "
                     "likely wrong! Using default settings, but expect shape "
                     "errors later on.")
+    return transposed, molecular
 
 
+#TODO the kernel parameters aren't necessary if not recomputing the kernel,
+#     might as well make a separate function (or make these optional, to keep
+#     the interface)
 def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
-                     charge_reg, weight_scalar=0.0, weight_tensor=0.0,
-                     n_sparse_envs=2000, n_sparse_components=500, workdir=None,
-                     dipole_normalize=True, recompute_kernels=True):
-
-    if (weight_scalar == 0.0) and (weight_tensor == 0.0):
-        raise ValueError("Can't have both scalar and tensor weights set "
-                         "to zero")
+                     charge_reg, weight_scalar, weight_tensor, workdir,
+                     n_sparse_envs=2000, n_sparse_components=500,
+                     dipole_normalize=True, recompute_kernels=False,
+                     cv_idces_sets=None):
     if recompute_kernels:
         if weight_tensor != 0.0:
             raise ValueError("Recomputing vector kernels is not yet supported")
         recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m,
                                  n_sparse_envs, n_sparse_components, workdir)
-
-    # compute weights (velociraptor)
     dipoles_train = np.load(os.path.join(workdir, 'dipoles_train.npy'))
     geoms_train = ase.io.read(os.path.join(workdir, 'qm7_train.xyz'), ':')
     if dipole_normalize:
@@ -216,55 +242,132 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                                  for geom in geoms_train])
         dipoles_train = dipoles_train / natoms_train[:, np.newaxis]
     charges_train = get_charges(geoms_train)
-    (scalar_kernel_sparse, scalar_kernel_full_sparse,
-     tensor_kernel_sparse, tensor_kernel_full_sparse) = load_train_kernels(
-            workdir, weight_scalar, weight_tensor)
+    (scalar_kernel_sparse, scalar_kernel_transformed,
+     tensor_kernel_sparse, tensor_kernel_transformed) = load_transform_kernels(
+             workdir, geoms_train, weight_scalar, weight_tensor,
+             load_sparse=True)
+    if cv_idces_sets is None:
+        weights = compute_weights(
+                dipoles_train, charges_train,
+                scalar_kernel_sparse, scalar_kernel_transformed,
+                tensor_kernel_sparse, tensor_kernel_transformed,
+                scalar_weight=weight_scalar, tensor_weight=weight_tensor,
+                charge_mode='fit', dipole_regularization=dipole_reg,
+                charge_regularization=charge_reg, sparse_jitter=0.0)
+        return compute_residual_from_weights(
+                weights, weight_scalar, weight_tensor, dipole_normalize,
+                workdir)
+    else:
+        return compute_cv_residual(
+                scalar_kernel_sparse, scalar_kernel_transformed,
+                tensor_kernel_sparse, tensor_kernel_transformed,
+                geoms_train, dipoles_train, charges_train,
+                dipole_reg, charge_reg, weight_scalar, weight_tensor,
+                cv_idces_sets, workdir, dipole_normalize)
+
+
+#TODO this is looking more and more like a constructor for a fitting class
+#     that contains all the kernels and data necessary to do a fit
+def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
+                           load_sparse=True, full_kernel_name='NM'):
+    if (weight_scalar == 0.0) and (weight_tensor == 0.0):
+        raise ValueError("Can't have both scalar and tensor weights set "
+                         "to zero")
+    if load_sparse:
+        (scalar_kernel_sparse, scalar_kernel_full_sparse,
+         tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(
+                workdir, weight_scalar, weight_tensor, load_sparse=True,
+                full_name=full_kernel_name)
+        n_sparse_envs = scalar_kernel_sparse.shape[0]
+    else:
+        scalar_kernel_full_sparse, tensor_kernel_full_sparse = load_kernels(
+                workdir, weight_scalar, weight_tensor, load_sparse=False,
+                full_name=full_kernel_name)
+        # Assume the convention for the scalar kernels is _not_ transposed
+        n_sparse_envs = scalar_kernel_full_sparse.shape[1]
     (tensor_kernel_transposed,
      tensor_kernel_molecular) = infer_kernel_convention(
-            tensor_kernel_full_sparse.shape, len(geoms_train), n_sparse_envs)
+            tensor_kernel_full_sparse.shape, len(geoms), n_sparse_envs)
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
-            geoms_train, scalar_kernel_full_sparse, weight_scalar,
+            geoms, scalar_kernel_full_sparse, weight_scalar,
             tensor_kernel_full_sparse, weight_tensor,
             vector_kernel_molecular=tensor_kernel_molecular,
             transpose_scalar_kernel=False,
             transpose_vector_kernel=tensor_kernel_transposed)
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
-    scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
-            geoms_train, scalar_kernel_sparse, weight_scalar,
-            tensor_kernel_sparse, tensor_kernel)
-    scalar_weights = compute_weights(
-            dipoles_train, charges_train,
-            scalar_kernel_sparse, scalar_kernel_transformed,
-            tensor_kernel_sparse, tensor_kernel_transformed,
-            scalar_weight=weight_scalar, tensor_weight=weight_tensor,
-            charge_mode='fit',
-            dipole_regularization=dipole_reg, charge_regularization=charge_reg,
-            sparse_jitter=0.0)
+    if load_sparse:
+        scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
+                geoms_train, scalar_kernel_sparse, weight_scalar,
+                tensor_kernel_sparse, tensor_kernel)
+        return (scalar_kernel_sparse, scalar_kernel_transformed,
+                tensor_kernel_sparse, tensor_kernel_transformed)
+    else:
+        return scalar_kernel_transformed, tensor_kernel_transformed
 
-    # compute residuals (velociraptor)
+
+def compute_cv_residual(
+        scalar_kernel_sparse, scalar_kernel_transformed,
+        tensor_kernel_sparse, tensor_kernel_transformed,
+        geoms, dipoles, charges, dipole_reg, charge_reg,
+        weight_scalar, weight_tensor,
+        cv_idces_sets, workdir, dipole_normalize=True,
+        write_results=True):
+    """Compute the CV residual by splitting the training data
+
+    Uses kernels that have been pre-computed for the whole dataset
+    """
+    if (weight_scalar == 0.0) and (weight_tensor == 0.0):
+        raise ValueError("Can't have both scalar and tensor weights set "
+                         "to zero")
+    rmse_sum = 0.0
+    for cv_num, cv_idces in enumerate(cv_idces_sets):
+        cv_test, cv_train = do_cv_split(scalar_kernel_transformed,
+                                        tensor_kernel_transformed,
+                                        geoms, dipoles, cv_idces)
+        (dipoles_train, charges_train, geoms_train,
+         scalar_kernel_train, tensor_kernel_train) = cv_train
+        weights = compute_weights(
+                dipoles_train, charges_train, scalar_kernel_sparse,
+                scalar_kernel_train, tensor_kernel_sparse, tensor_kernel_train,
+                scalar_weight=weight_scalar, tensor_weight=weight_tensor,
+                charge_mode='fit', dipole_regularization=dipole_reg,
+                charge_regularization=charge_reg, sparse_jitter=0.0)
+        if write_results:
+            np.save(os.path.join(
+                workdir, 'cv_{:d}_weights.npz'.format(cv_num)), weights)
+        (dipoles_test, charges_test, geoms_test,
+         scalar_kernel_test, tensor_kernel_test) = cv_test
+        natoms_test = [geom.get_number_of_atoms() for geom in geoms_test]
+        write_residuals = (
+                os.path.join(workdir, 'cv_{:d}_residuals.npz'.format(cv_num))
+                if write_results else None)
+        resids = compute_residuals(
+                weights, dipoles_test, charges_test, natoms_test,
+                scalar_kernel_test, tensor_kernel_test,
+                weight_scalar, weight_tensor, charge_mode='fit',
+                dipole_normalized=dipole_normalize,
+                write_residuals=write_residuals)['dipole_rmse']
+        LOGGER.info("Finished computing test residual: {:.6g}".format(
+            resids['dipole_rmse']))
+        rmse_sum +=  resids['dipole_rmse']
+    return rmse_sum / len(cv_idces_sets)
+
+
+def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
+                                  dipole_normalize=True, workdir=None):
     dipoles_test = np.load(os.path.join(workdir, 'dipoles_test.npy'))
     geoms_test = ase.io.read(os.path.join(workdir, 'qm7_test.xyz'), ':')
     natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
     if dipole_normalize:
         dipoles_test = dipoles_test / natoms_test[:, np.newaxis]
     charges_test = get_charges(geoms_test)
-    scalar_kernel_test_train, tensor_kernel_test_train = load_test_kernels(
-            workdir, weight_scalar, weight_tensor)
-    (tensor_kernel_transposed,
-     tensor_kernel_molecular) = infer_kernel_convention(
-            tensor_kernel_test_train.shape, len(geoms_test), n_sparse_envs)
     (scalar_kernel_test_transformed,
-     tensor_kernel_test_transformed) = transform_kernels(
-            geoms_test, scalar_kernel_test_train, weight_scalar,
-            tensor_kernel_test_train, weight_tensor,
-            vector_kernel_molecular=tensor_kernel_molecular,
-            transpose_scalar_kernel=False,
-            transpose_vector_kernel=tensor_kernel_transposed)
-    del scalar_kernel_test_train
-    del tensor_kernel_test_train
+     tensor_kernel_test_transformed = load_transform_kernels(
+         workdir, geoms_test, weight_scalar, weight_tensor, load_sparse=False,
+         full_kernel_name='TM')
     resids = compute_residuals(
-            scalar_weights, dipoles_test, charges_test, natoms_test,
+            weights, dipoles_test, charges_test, natoms_test,
             scalar_kernel_test_transformed, tensor_kernel_test_transformed,
             scalar_weight=weight_scalar, tensor_weight=weight_tensor,
             charge_mode='fit', dipole_normalized=dipole_normalize)
