@@ -285,9 +285,13 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
                 full_name=full_kernel_name)
         # Assume the convention for the scalar kernels is _not_ transposed
         n_sparse_envs = scalar_kernel_full_sparse.shape[1]
-    (tensor_kernel_transposed,
-     tensor_kernel_molecular) = infer_kernel_convention(
-            tensor_kernel_full_sparse.shape, len(geoms), n_sparse_envs)
+    if weight_tensor != 0.0:
+        (tensor_kernel_transposed,
+         tensor_kernel_molecular) = infer_kernel_convention(
+                tensor_kernel_full_sparse.shape, len(geoms), n_sparse_envs)
+    else:
+        tensor_kernel_transposed = False
+        tensor_kernel_molecular = False
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
             geoms, scalar_kernel_full_sparse, weight_scalar,
             tensor_kernel_full_sparse, weight_tensor,
