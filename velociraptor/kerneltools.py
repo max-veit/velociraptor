@@ -197,14 +197,21 @@ def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
         else:
             geoms_train.append(geom)
     idces_train = np.setdiff1d(np.arange(len(geoms)), idces_test, True)
+    idces_all = np.arange(len(geoms)*4).reshape((4, -1))
+    idces_charge_dipole_test = idces_all[idces_test].flat
+    idces_charge_dipole_train = idces_all[idces_train].flat
     if scalar_kernel_transformed.shape != (0,):
-        scalar_kernel_test = scalar_kernel_transformed[idces_test, :]
-        scalar_kernel_train = scalar_kernel_transformed[idces_train, :]
+        scalar_kernel_test = scalar_kernel_transformed[
+                idces_charge_dipole_test, :]
+        scalar_kernel_train = scalar_kernel_transformed[
+                idces_charge_dipole_train, :]
     else:
         scalar_kernel_test = scalar_kernel_train = scalar_kernel_transformed
     if tensor_kernel_transformed.shape != (0,):
-        tensor_kernel_test = tensor_kernel_transformed[idces_test, :]
-        tensor_kernel_train = tensor_kernel_transformed[idces_train, :]
+        tensor_kernel_test = tensor_kernel_transformed[
+                idces_charge_dipole_test, :]
+        tensor_kernel_train = tensor_kernel_transformed[
+                idces_charge_dipole_train, :]
     else:
         tensor_kernel_test = tensor_kernel_train = tensor_kernel_transformed
     dipoles_test = dipoles[idces_test, :]
