@@ -205,10 +205,12 @@ def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
     if tensor_kernel_transformed.shape != (0,):
         tensor_kernel_test = tensor_kernel_transformed[idces_test, :]
         tensor_kernel_train = tensor_kernel_transformed[idces_train, :]
+    else:
+        tensor_kernel_test = tensor_kernel_train = tensor_kernel_transformed
     dipoles_test = dipoles[idces_test, :]
     dipoles_train = dipoles[idces_train, :]
-    charges_test = charges[idces_test, :]
-    charges_train = charges[idces_train, :]
+    charges_test = charges[idces_test]
+    charges_train = charges[idces_train]
     return ((dipoles_test, charges_test, geoms_test,
              scalar_kernel_test, tensor_kernel_test),
             (dipoles_train, charges_train, geoms_train,
