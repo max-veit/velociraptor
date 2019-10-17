@@ -5,7 +5,8 @@ import numpy as np
 
 
 def transform_envts_charge_dipoles(molecules, target_matrix,
-                                   transpose_kernel=False):
+                                   transpose_kernel=False,
+                                   dipole_normalize=False):
     """Transform a matrix of environments to charges+dipoles
 
     Parameters:
@@ -21,6 +22,10 @@ def transform_envts_charge_dipoles(molecules, target_matrix,
                         full:sparse (NM) -- in this case, meaning the
                         environments are along the columns rather than
                         the rows.
+        dipole_normalize
+                        Whether to normalize the molecular kernel by the
+                        number of atoms, in order to work with dipole
+                        moments and charges that are similarly normalized
 
     This performs the product L@K, where the matrix L is composed of
     blocks arranged diagonally, each block corresponding to a single
@@ -72,13 +77,16 @@ def transform_envts_charge_dipoles(molecules, target_matrix,
                                          molecule_positions),
                                         axis=1)
         molecule_target_transformed = molecule_trafo.T.dot(molecule_target)
+        if dipole_normalize:
+            molecule_target_transformed /= natoms_mol
         target_transformed[
             mol_idx*4:(mol_idx+1)*4] = molecule_target_transformed
     return target_transformed
 
 
 def transform_vector_envts_charge_dipoles(molecules, target_matrix,
-                                          transpose_kernel=False):
+                                          transpose_kernel=False,
+                                          dipole_normalize=True):
     """Transform a matrix of vector environments to charges+dipoles
 
     This takes a matrix of shape (n_envs, n_sparse, 3, 3), describing
@@ -100,6 +108,10 @@ def transform_vector_envts_charge_dipoles(molecules, target_matrix,
                         Whether the kernel was computed in the opposite
                         order, sparse:full (MN) instead of the expected
                         full:sparse (NM)
+        dipole_normalize
+                        Whether to normalize the molecular kernel by the
+                        number of atoms, in order to work with dipole
+                        moments and charges that are similarly normalized
 
     The charges and dipoles are ordered canonically, i.e. for each
     configuration the total charge first and then the three Cartesian
@@ -133,14 +145,19 @@ def transform_vector_envts_charge_dipoles(molecules, target_matrix,
         else:
             molecule_target = target_matrix[
                     :, environ_idx:environ_idx+natoms_mol]
+            if dipole_normalize:
+                molecule_target_summed = molecule_target.mean(axis=1)
+            else:
+                molecule_target_summed = molecule_target.sum(axis=1)
             target_transformed[4*mol_idx + 1 : 4*mol_idx + 4] = (
-                molecule_target.mean(axis=1).transpose(2, 0, 1).reshape(3, -1))
+                molecule_target_summed.transpose(2, 0, 1).reshape(3, -1))
         environ_idx += natoms_mol
     return target_transformed
 
 
 def transform_vector_mols_charge_dipoles(molecules, target_matrix,
-                                         transpose_kernel=False):
+                                         transpose_kernel=False,
+                                         dipole_unnormalize=False):
     """Transform a matrix of vector molecular kernels to charges+dipoles
 
     This takes a matrix of shape (n_mol, n_sparse, 3, 3), describing the
@@ -163,6 +180,11 @@ def transform_vector_mols_charge_dipoles(molecules, target_matrix,
                         Whether the kernel was computed in the opposite
                         order, sparse:full (MN) instead of the expected
                         full:sparse (NM)
+        dipole_unnormalize
+                        Whether to undo the (default) normalization of the
+                        molecular vector kernel by the number of atoms, in
+                        order to work with dipole moments that are
+                        likewise not normalized
 
     The charges and dipoles are ordered canonically, i.e. for each
     configuration the total charge first and then the three Cartesian
@@ -181,6 +203,12 @@ def transform_vector_mols_charge_dipoles(molecules, target_matrix,
     if target_n_molecules != len(molecules):
         raise ValueError("Target matrix must have as many rows (columns, if "
                          "transposed) as molecules provided")
+    if dipole_unnormalize:
+        natoms_mol = np.array([mol.get_number_of_atoms() for mol in molecules])
+        if not transpose_kernel:
+            target_matrix *= natoms_mol.reshape(-1, 1, 1, 1)
+        else:
+            target_matrix *= natoms_mol.reshape(1, -1, 1, 1)
     if not transpose_kernel:
         target_new = np.concatenate((np.zeros(target_shape[:2] + (1, 3)),
                                      target_matrix), axis=2)

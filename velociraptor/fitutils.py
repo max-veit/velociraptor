@@ -1,6 +1,7 @@
 """High-level utilities for fitting, preparation, and post-processing"""
 
 
+import logging
 import numpy as np
 
 from . import solvers
@@ -8,7 +9,6 @@ from .transform import (transform_envts_charge_dipoles,
                         transform_vector_envts_charge_dipoles,
                         transform_vector_mols_charge_dipoles)
 
-import logging
 logger = logging.getLogger(__name__)
 
 
@@ -20,10 +20,12 @@ def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
                       vector_kernel_full_sparse, vector_weight,
                       vector_kernel_molecular=False,
                       transpose_scalar_kernel=False,
-                      transpose_vector_kernel=False):
+                      transpose_vector_kernel=False,
+                      dipole_normalize=True):
     if scalar_weight != 0:
         scalar_kernel_transformed = transform_envts_charge_dipoles(
-                geometries, scalar_kernel_full_sparse, transpose_scalar_kernel)
+                geometries, scalar_kernel_full_sparse, transpose_scalar_kernel,
+                dipole_normalize)
         scalar_kernel_transformed *= scalar_weight
     else:
         scalar_kernel_transformed = scalar_kernel_full_sparse
@@ -32,11 +34,11 @@ def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
         if vector_kernel_molecular:
             vector_kernel_transformed = transform_vector_mols_charge_dipoles(
                         geometries, vector_kernel_full_sparse,
-                        transpose_vector_kernel)
+                        transpose_vector_kernel, (not dipole_normalize))
         else:
             vector_kernel_transformed = transform_vector_envts_charge_dipoles(
                         geometries, vector_kernel_full_sparse,
-                        transpose_vector_kernel)
+                        transpose_vector_kernel, dipole_normalize)
         vector_kernel_transformed *= vector_weight
     else:
         vector_kernel_transformed = vector_kernel_full_sparse
@@ -131,7 +133,7 @@ def compute_weights(dipoles, charges,
                 sparse_jitter, condition_cutoff=condition_cutoff)
         return weights
     else:
-        raise ValueError("Unrecognized charge mode '%s'".format(charge_mode))
+        raise ValueError("Unrecognized charge mode '{:s}'".format(charge_mode))
 
 
 def compute_residuals(
@@ -170,5 +172,4 @@ def compute_residuals(
     if write_residuals is not None:
         np.savez(write_residuals, **residuals)
     return residuals
-
 

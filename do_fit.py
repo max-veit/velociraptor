@@ -65,8 +65,7 @@ parser.add_argument(
     '-dn', '--dipole-no-normalize',
             action='store_false', dest='dipole_normalize',
             help="Don't normalize the dipole by the number of atoms before "
-            "fitting (not recommended, the default of per-atom normalization "
-            "significantly improves fit stability)")
+            "fitting (the fit is usally better _with_ normalization)")
 parser.add_argument(
     '-nt', '--num-training-geometries', type=int, metavar='<n>', default=-1,
             help="Keep only the first <n> geometries for training.")
@@ -188,7 +187,8 @@ if __name__ == "__main__":
         geometries, scalar_kernel_full_sparse, args.scalar_weight,
         tensor_kernel_full_sparse, args.tensor_weight,
         args.tensor_kernel_molecular, args.transpose_full_kernels,
-        (args.transpose_full_kernels or args.transpose_vector_kernels))
+        (args.transpose_full_kernels or args.transpose_vector_kernels),
+        args.dipole_normalize)
     # Close files or free memory for what comes next
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse

@@ -287,7 +287,7 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
     (scalar_kernel_sparse, scalar_kernel_transformed,
      tensor_kernel_sparse, tensor_kernel_transformed) = load_transform_kernels(
              workdir, geoms_train, weight_scalar, weight_tensor,
-             load_sparse=True)
+             load_sparse=True, dipole_normalize=dipole_normalize)
     if cv_idces_sets is None:
         weights = compute_weights(
                 dipoles_train, charges_train,
@@ -311,7 +311,8 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
 #TODO this is looking more and more like a constructor for a fitting class
 #     that contains all the kernels and data necessary to do a fit
 def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
-                           load_sparse=True, full_kernel_name='NM'):
+                           load_sparse=True, full_kernel_name='NM',
+                           dipole_normalize=True):
     if (weight_scalar == 0.0) and (weight_tensor == 0.0):
         raise ValueError("Can't have both scalar and tensor weights set "
                          "to zero")
@@ -339,7 +340,8 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
             tensor_kernel_full_sparse, weight_tensor,
             vector_kernel_molecular=tensor_kernel_molecular,
             transpose_scalar_kernel=False,
-            transpose_vector_kernel=tensor_kernel_transposed)
+            transpose_vector_kernel=tensor_kernel_transposed,
+            dipole_normalize=dipole_normalize)
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
     if load_sparse:
@@ -410,7 +412,7 @@ def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
     (scalar_kernel_test_transformed,
      tensor_kernel_test_transformed) = load_transform_kernels(
          workdir, geoms_test, weight_scalar, weight_tensor, load_sparse=False,
-         full_kernel_name='TM')
+         full_kernel_name='TM', dipole_normalize=dipole_normalize)
     resids = compute_residuals(
             weights, dipoles_test, charges_test, natoms_test,
             scalar_kernel_test_transformed, tensor_kernel_test_transformed,
