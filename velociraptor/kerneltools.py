@@ -116,7 +116,7 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
     if not os.path.dirname(ps_name):
         ps_name = os.path.join(workdir, ps_name)
     if not os.path.dirname(ps0_name):
-        ps_name = os.path.join(workdir, ps0_name)
+        ps0_name = os.path.join(workdir, ps0_name)
     if (ps_second_name is not None) and not os.path.dirname(ps_second_name):
         ps_second_name = os.path.join(workdir, ps_second_name)
     if (ps0_second_name is not None) and not os.path.dirname(ps0_second_name):
@@ -204,16 +204,17 @@ def recompute_vector_kernels(
                           zeta=zeta, workdir=workdir)
     # full-sparse
     compute_vector_kernel(
-            'PS1_train.npy', 'PS0_train.npy',
             'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
+            'PS1_train.npy', 'PS0_train.npy',
             'PS1_train_natoms.npy',
-            zeta=zeta, kernel_name='K1_NM', workdir=workdir)
+            zeta=zeta, kernel_name='K1_MN', workdir=workdir)
     # test-train(sparse)
     if atoms_filename_test is not None:
         compute_vector_kernel(
-                'PS1_test.npy', 'PS0_test.npy',
                 'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
-                zeta=zeta, kernel_name='K1_TM', workdir=workdir)
+                'PS1_test.npy', 'PS0_test.npy',
+                'PS1_test_natoms.npy',
+                zeta=zeta, kernel_name='K1_MT', workdir=workdir)
     #TODO transform spherical to Cartesian kernels!
 
 
