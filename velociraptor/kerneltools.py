@@ -40,13 +40,13 @@ def compute_power_spectra(
         '-n', str(n_max), '-l', str(l_max), '-rc', str(r_cut),
         '-sg', str(atom_width),
         '-c',] + 'H C N O S Cl'.split() + ['-s',] + 'H C N O S Cl'.split() + [
-        '-lm', lambda_, '-nc', str(n_sparse_components),
+        '-lm', str(lambda_), '-nc', str(n_sparse_components),
         '-rs', str(rad_c), str(rad_r0), str(rad_m),
         '-o', os.path.join(workdir, ps_prefix)
     ])
     if feat_sparsefile is not None:
         ps_args.extend(['-sf', os.path.join(workdir, feat_sparsefile)])
-    LOGGER.info("Running: " + ' '.join(ps_args))
+    LOGGER.info("Running: ", *ps_args)
     subprocess.run(ps_args, check=True)
 
     # ATOMIC POWER spectra!
@@ -124,7 +124,7 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
                          " providing a second lambda=1 powerspectrum")
     if ps_second_name is not None:
         ps_files = [ps_name, ps_second_name]
-        ps0_files
+        ps0_files = [ps0_name, ps0_second_name]
     else:
         ps_files = [ps_name, ]
     kernel_args = ([
