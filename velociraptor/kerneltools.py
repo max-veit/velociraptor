@@ -110,6 +110,7 @@ def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
 
 def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
                           ps0_second_name=None, scaling_file=None,
+                          scaling_file_second=None,
                           kernel_name='K1_MM',
                           zeta=2, workdir=None):
     #TODO this is getting ridiculous. Isn't there an os.path util for all these?
@@ -140,7 +141,14 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
         '-o', os.path.join(workdir, kernel_name)
     ])
     if scaling_file is not None:
-        kernel_args.extend(['-s', scaling_file])
+        if ps_second_name is None:
+            kernel_args.extend(['-s', scaling_file])
+        elif scaling_file_second is None:
+            kernel_args.extend(['-s', scaling_file, 'NONE'])
+        else:
+            kernel_args.extend(['-s', scaling_file, scaling_file_second])
+    elif (scaling_file_second is not None):
+        kernel_args.extend(['-s', 'NONE', scaling_file_second])
     LOGGER.info("Running: ", *kernel_args)
     subprocess.run(kernel_args, check=True)
 
@@ -204,15 +212,15 @@ def recompute_vector_kernels(
                           zeta=zeta, workdir=workdir)
     # full-sparse
     compute_vector_kernel(
-            'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
             'PS1_train.npy', 'PS0_train.npy',
+            'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
             'PS1_train_natoms.npy',
-            zeta=zeta, kernel_name='K1_MN', workdir=workdir)
+            zeta=zeta, kernel_name='K1_NM', workdir=workdir)
     # test-train(sparse)
     if atoms_filename_test is not None:
         compute_vector_kernel(
-                'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
                 'PS1_test.npy', 'PS0_test.npy',
+                'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
                 'PS1_test_natoms.npy',
                 zeta=zeta, kernel_name='K1_MT', workdir=workdir)
     #TODO transform spherical to Cartesian kernels!
