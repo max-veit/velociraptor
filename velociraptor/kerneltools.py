@@ -21,15 +21,14 @@ from .fitutils import (transform_kernels, transform_sparse_kernels,
 # SOAPFAST_PATH = "/home/veit/SOAPFAST/soapfast"
 logging.basicConfig()
 LOGGER = logging.getLogger(__name__)
+PY2_EXEC = os.environ.get('PY2_EXEC', 'python')
+SOAPFAST_PATH = os.environ.get('SOAPFAST_PATH', '')
 
 
-def compute_scalar_power_spectra(
-        n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0',
+def compute_power_spectra(
+        n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS', lambda_=0,
         atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
         n_sparse_components=500, feat_sparsefile=None):
-    # compute powerspectra (soapfast)
-    PY2_EXEC = os.environ.get('PY2_EXEC', 'python')
-    SOAPFAST_PATH = os.environ.get('SOAPFAST_PATH', '')
     # These PS parameters are unlikely to change
     rad_c = 1
     r_cut = 5.0
@@ -42,7 +41,7 @@ def compute_scalar_power_spectra(
         '-n', str(n_max), '-l', str(l_max), '-rc', str(r_cut),
         '-sg', str(atom_width),
         '-c',] + 'H C N O S Cl'.split() + ['-s',] + 'H C N O S Cl'.split() + [
-        '-lm', '0', '-nc', str(n_sparse_components),
+        '-lm', lambda_, '-nc', str(n_sparse_components),
         '-rs', str(rad_c), str(rad_r0), str(rad_m),
         '-o', os.path.join(workdir, ps_prefix)
     ])
@@ -78,10 +77,18 @@ def compute_scalar_power_spectra(
         subprocess.run(fps_args, check=True)
 
 
+def compute_scalar_power_spectra(
+        n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0',
+        atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
+        n_sparse_components=500, feat_sparsefile=None):
+    lambda_ = 0
+    compute_power_spectra(n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix,
+                          lambda_, atoms_file, workdir, n_sparse_envs,
+                          n_sparse_components, feat_sparsefile)
+
+
 def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
                           zeta=2, workdir=None):
-    PY2_EXEC = os.environ.get('PY2_EXEC', 'python')
-    SOAPFAST_PATH = os.environ.get('SOAPFAST_PATH', '')
     if not os.path.dirname(ps_name):
         ps_name = os.path.join(workdir, ps_name)
     if (ps_second_name is not None) and not os.path.dirname(ps_second_name):
@@ -102,21 +109,53 @@ def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
     subprocess.run(kernel_args, check=True)
 
 
-def recompute_scalar_test_train_kernels(
+def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
+                          ps0_second_name=None, kernel_name='K1_MM',
+                          zeta=2, workdir=None):
+    if not os.path.dirname(ps_name):
+        ps_name = os.path.join(workdir, ps_name)
+    if not os.path.dirname(ps0_name):
+        ps_name = os.path.join(workdir, ps0_name)
+    if (ps_second_name is not None) and not os.path.dirname(ps_second_name):
+        ps_second_name = os.path.join(workdir, ps_second_name)
+    if (ps0_second_name is not None) and not os.path.dirname(ps0_second_name):
+        ps0_second_name = os.path.join(workdir, ps0_second_name)
+    if (ps_second_name is not None) and (ps0_second_name is None):
+        raise ValueError("Must also provide a second lambda=0 powerspectrum if"
+                         " providing a second lambda=1 powerspectrum")
+    if ps_second_name is not None:
+        ps_files = [ps_name, ps_second_name]
+        ps0_files
+    else:
+        ps_files = [ps_name, ]
+    kernel_args = ([
+        PY2_EXEC,
+        os.path.join(SOAPFAST_PATH, 'get_kernel.py'),
+        '-z', str(zeta),
+        '-ps', ] + ps_files + ['-ps0',] + ps_files + [
+        '-o', os.path.join(workdir, kernel_name)
+    ])
+    LOGGER.info("Running: " + ' '.join(kernel_args))
+    subprocess.run(kernel_args, check=True)
+
+
+def recompute_scalar_kernels(
         n_max, l_max, atom_width, rad_r0, rad_m,
+        atoms_filename_train='qm7_train.xyz', atoms_filename_test=None,
         n_sparse_envs=2000, n_sparse_components=500, workdir=None):
     # number of sparse envs is another convergence parameter
     compute_scalar_power_spectra(
             n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_train',
-            atoms_file='qm7_train.xyz', workdir=workdir,
+            atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
             n_sparse_components=n_sparse_components)
     # Make sure feat sparsification uses the PS0_train values!
     # (and don't sparsify on envs)
-    compute_scalar_power_spectra(
-            n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_test',
-            atoms_file='qm7_test.xyz', workdir=workdir,
-            feat_sparsefile='PS0_train', n_sparse_envs=-1)
+    if atoms_filename_test is not None:
+        compute_scalar_power_spectra(
+                n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_test',
+                atoms_file=atoms_filename_test, workdir=workdir,
+                feat_sparsefile='PS0_train', n_sparse_envs=-1)
     # compute kernels (soapfast)
     zeta = 2 # possibly another parameter to gridsearch
     # sparse-sparse
@@ -127,27 +166,48 @@ def recompute_scalar_test_train_kernels(
             'PS0_train_atomic.npy', 'PS0_train_atomic_sparse.npy', zeta=zeta,
             kernel_name='K0_NM', workdir=workdir)
     # test-train(sparse)
-    compute_scalar_kernel('PS0_test_atomic.npy', 'PS0_train_atomic_sparse.npy',
-                          zeta=zeta, kernel_name='K0_TM', workdir=workdir)
+    if atoms_filename_test is not None:
+        compute_scalar_kernel(
+                'PS0_test_atomic.npy', 'PS0_train_atomic_sparse.npy',
+                zeta=zeta, kernel_name='K0_TM', workdir=workdir)
 
 
-#TODO merge with above
-def recompute_scalar_kernels(n_max, l_max, atom_width, rad_r0, rad_m, workdir,
-                             n_sparse_envs=2000, n_sparse_components=500,
-                             atoms_filename='qm7_train.xyz'):
-    compute_scalar_power_spectra(
-            n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_full',
-            atoms_file=atoms_filename, workdir=workdir,
+def recompute_vector_kernels(
+        n_max, l_max, atom_width, rad_r0, rad_m,
+        atoms_filename_train='qm7_train.xyz', atoms_filename_test=None,
+        n_sparse_envs=2000, n_sparse_components=500, workdir=None):
+    compute_power_spectra(
+            n_max, l_max, atom_width, rad_r0, rad_m, lambda_=1,
+            ps_prefix='PS1_train',
+            atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
             n_sparse_components=n_sparse_components)
+    # Make sure feat sparsification uses the PS1_train values!
+    # (and don't sparsify on envs)
+    if atoms_filename_test is not None:
+        compute_power_spectra(
+                n_max, l_max, atom_width, rad_r0, rad_m, lambda_=1,
+                ps_prefix='PS1_test',
+                atoms_file=atoms_filename_test, workdir=workdir,
+                feat_sparsefile='PS1_train', n_sparse_envs=-1)
+    # compute kernels (soapfast)
     zeta = 2 # possibly another parameter to gridsearch
     # sparse-sparse
-    compute_scalar_kernel('PS0_full_atomic_sparse.npy', kernel_name='K0_MM',
+    compute_vector_kernel('PS1_train_atomic_sparse.npy',
+                          'PS0_train_atomic_sparse.npy', kernel_name='K1_MM',
                           zeta=zeta, workdir=workdir)
     # full-sparse
-    compute_scalar_kernel(
-            'PS0_full_atomic.npy', 'PS0_full_atomic_sparse.npy', zeta=zeta,
-            kernel_name='K0_NM', workdir=workdir)
+    compute_vector_kernel(
+            'PS1_train.npy', 'PS0_train.npy',
+            'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
+            zeta=zeta, kernel_name='K1_NM', workdir=workdir)
+    # test-train(sparse)
+    if atoms_filename_test is not None:
+        compute_vector_kernel(
+                'PS1_test.npy', 'PS0_test.npy',
+                'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
+                zeta=zeta, kernel_name='K1_TM', workdir=workdir)
+    #TODO transform spherical to Cartesian kernels!
 
 
 #TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
@@ -178,11 +238,6 @@ def load_kernels(workdir, weight_scalar, weight_tensor, full_name='NM',
                 tensor_kernel_sparse, tensor_kernel_full_sparse)
     else:
         return scalar_kernel_full_sparse, tensor_kernel_full_sparse
-
-
-def load_test_kernels(workdir, weight_scalar, weight_tensor):
-    return load_kernels(workdir, weight_scalar, weight_tensor,
-                        full_name='TM', load_sparse=False)
 
 
 #TODO package the cv-split (or the data and kernels necessary for fitting, more
@@ -269,14 +324,14 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
         if weight_tensor != 0.0:
             raise ValueError("Recomputing vector kernels is not yet supported")
         if cv_idces_sets is None:
-            recompute_scalar_test_train_kernels(
-                    n_max, l_max, atom_width, rad_r0, rad_m,
-                    n_sparse_envs, n_sparse_components, workdir)
+            atoms_filename_test = 'qm7_test.xyz'
         else:
-            recompute_scalar_kernels(
-                    n_max, l_max, atom_width, rad_r0, rad_m, workdir,
-                    n_sparse_envs, n_sparse_components,
-                    atoms_filename=atoms_filename_train)
+            atoms_filename_test = None
+        recompute_scalar_kernels(
+                n_max, l_max, atom_width, rad_r0, rad_m,
+                atoms_filename_train, atoms_filename_test,
+                n_sparse_envs, n_sparse_components, workdir)
+        #TODO recompute vector kernels, if _independently_ requested
     dipoles_train = np.load(os.path.join(workdir, dipoles_filename_train))
     geoms_train = ase.io.read(os.path.join(workdir, atoms_filename_train), ':')
     if dipole_normalize:
