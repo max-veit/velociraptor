@@ -7,7 +7,8 @@ import numpy as np
 from . import solvers
 from .transform import (transform_envts_charge_dipoles,
                         transform_vector_envts_charge_dipoles,
-                        transform_vector_mols_charge_dipoles)
+                        transform_vector_mols_charge_dipoles,
+                        transform_spherical_tensor_to_cartesian)
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
                       vector_kernel_molecular=False,
                       transpose_scalar_kernel=False,
                       transpose_vector_kernel=False,
-                      dipole_normalize=True):
+                      dipole_normalize=True, spherical=False):
     if scalar_weight != 0:
         scalar_kernel_transformed = transform_envts_charge_dipoles(
                 geometries, scalar_kernel_full_sparse, transpose_scalar_kernel,
@@ -34,11 +35,12 @@ def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
         if vector_kernel_molecular:
             vector_kernel_transformed = transform_vector_mols_charge_dipoles(
                         geometries, vector_kernel_full_sparse,
-                        transpose_vector_kernel, (not dipole_normalize))
+                        transpose_vector_kernel, (not dipole_normalize),
+                        spherical)
         else:
             vector_kernel_transformed = transform_vector_envts_charge_dipoles(
                         geometries, vector_kernel_full_sparse,
-                        transpose_vector_kernel, dipole_normalize)
+                        transpose_vector_kernel, dipole_normalize, spherical)
         vector_kernel_transformed *= vector_weight
     else:
         vector_kernel_transformed = vector_kernel_full_sparse
@@ -46,7 +48,8 @@ def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
 
 
 def transform_sparse_kernels(geometries, scalar_kernel_sparse, scalar_weight,
-                                         tensor_kernel_sparse, tensor_weight):
+                                         tensor_kernel_sparse, tensor_weight,
+                                         spherical=False):
     if scalar_weight != 0:
         scalar_kernel_sparse = scalar_kernel_sparse * scalar_weight
     if tensor_weight != 0:
@@ -56,6 +59,9 @@ def transform_sparse_kernels(geometries, scalar_kernel_sparse, scalar_weight,
                     "Vector kernel has unrecognized shape: {}, was"
                     "expecting something of the form (n_sparse, n_sparse, "
                     "3, 3)".format(kernel_shape))
+        if spherical:
+            tensor_kernel_sparse = transform_spherical_tensor_to_cartesian(
+                    tensor_kernel_sparse)
         tensor_kernel_sparse = (
                 tensor_kernel_sparse.transpose((0, 2, 1, 3)).reshape(
                     (kernel_shape[0]*3, kernel_shape[1]*3))

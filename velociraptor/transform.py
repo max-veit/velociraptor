@@ -84,9 +84,18 @@ def transform_envts_charge_dipoles(molecules, target_matrix,
     return target_transformed
 
 
-def transform_vector_envts_charge_dipoles(molecules, target_matrix,
-                                          transpose_kernel=False,
-                                          dipole_normalize=True):
+def transform_spherical_tensor_to_cartesian(target_matrix):
+    """Transform a matrix from spherical-tensor to Cartesian ordering"""
+    target_shape = target_matrix.shape
+    if target_shape[2:] != (3, 3):
+        raise ValueError('Vector kernel has unrecognized shape: {}'.format(
+                target_shape))
+    return target_matrix[:, :, [2, 0, 1]][:, :, :, [2, 0, 1]]
+
+
+def transform_vector_envts_charge_dipoles(
+        molecules, target_matrix, transpose_kernel=False,
+        dipole_normalize=True, spherical=False):
     """Transform a matrix of vector environments to charges+dipoles
 
     This takes a matrix of shape (n_envs, n_sparse, 3, 3), describing
@@ -112,6 +121,12 @@ def transform_vector_envts_charge_dipoles(molecules, target_matrix,
                         Whether to normalize the molecular kernel by the
                         number of atoms, in order to work with dipole
                         moments and charges that are similarly normalized
+        spherical       Whether the kernel matrix was stored in "spherical
+                        tensor" order (i.e. in order of the spherical l=1
+                        components, rather than the Cartesian components)
+                        Setting this option to True will transform it to
+                        the standard Cartesian basis used by the rest of
+                        velociraptor
 
     The charges and dipoles are ordered canonically, i.e. for each
     configuration the total charge first and then the three Cartesian
@@ -132,6 +147,8 @@ def transform_vector_envts_charge_dipoles(molecules, target_matrix,
         raise ValueError("Target matrix must have as many rows (columns, if "
                          "transposed) as environments (i.e. atoms) in the "
                          "list of molecules")
+    if spherical:
+        target_matrix = target_matrix[:, :, [2, 0, 1]][:, :, :, [2, 0, 1]]
     target_transformed = np.empty(target_shape_new)
     environ_idx = 0
     for mol_idx, molecule in enumerate(molecules):
@@ -155,9 +172,9 @@ def transform_vector_envts_charge_dipoles(molecules, target_matrix,
     return target_transformed
 
 
-def transform_vector_mols_charge_dipoles(molecules, target_matrix,
-                                         transpose_kernel=False,
-                                         dipole_unnormalize=False):
+def transform_vector_mols_charge_dipoles(
+        molecules, target_matrix, transpose_kernel=False,
+        dipole_unnormalize=False, spherical=False):
     """Transform a matrix of vector molecular kernels to charges+dipoles
 
     This takes a matrix of shape (n_mol, n_sparse, 3, 3), describing the
@@ -185,6 +202,12 @@ def transform_vector_mols_charge_dipoles(molecules, target_matrix,
                         molecular vector kernel by the number of atoms, in
                         order to work with dipole moments that are
                         likewise not normalized
+        spherical       Whether the kernel matrix was stored in "spherical
+                        tensor" order (i.e. in order of the spherical l=1
+                        components, rather than the Cartesian components)
+                        Setting this option to True will transform it to
+                        the standard Cartesian basis used by the rest of
+                        velociraptor
 
     The charges and dipoles are ordered canonically, i.e. for each
     configuration the total charge first and then the three Cartesian
@@ -203,6 +226,8 @@ def transform_vector_mols_charge_dipoles(molecules, target_matrix,
     if target_n_molecules != len(molecules):
         raise ValueError("Target matrix must have as many rows (columns, if "
                          "transposed) as molecules provided")
+    if spherical:
+        target_matrix = target_matrix[:, :, [2, 0, 1]][:, :, :, [2, 0, 1]]
     if dipole_unnormalize:
         natoms_mol = np.array([mol.get_number_of_atoms() for mol in molecules])
         if not transpose_kernel:

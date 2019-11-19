@@ -119,6 +119,10 @@ parser.add_argument(
             " tensor kernel stored in molecular, rather than atomic, format? "
             "(i.e. are they pre-summed over the atoms in a molecule?) "
             "Note this option is compatible with -tk and -tvk.")
+parser.add_argument(
+    '-st', '--spherical-tensor-ordering', action='store_true',
+           dest='spherical', help="Transform the vector kernels from spherical"
+           " tensor to the internal Cartesian ordering")
 
 
 def load_kernels(args):
@@ -182,13 +186,13 @@ if __name__ == "__main__":
         tensor_kernel_full_sparse = tensor_kernel_full_sparse[:, :n_vector]
     scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
         geometries, scalar_kernel_sparse, args.scalar_weight,
-                    tensor_kernel_sparse, args.tensor_weight)
+                    tensor_kernel_sparse, args.tensor_weight, args.spherical)
     scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
         geometries, scalar_kernel_full_sparse, args.scalar_weight,
         tensor_kernel_full_sparse, args.tensor_weight,
         args.tensor_kernel_molecular, args.transpose_full_kernels,
         (args.transpose_full_kernels or args.transpose_vector_kernels),
-        args.dipole_normalize)
+        args.dipole_normalize, args.spherical)
     # Close files or free memory for what comes next
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse

@@ -331,12 +331,13 @@ def infer_kernel_convention(kernel_shape, n_mol, n_sparse_envs):
 def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                      charge_reg, weight_scalar, weight_tensor, workdir,
                      n_sparse_envs=2000, n_sparse_components=500,
-                     dipole_normalize=True, recompute_kernels=False,
-                     cv_idces_sets=None):
+                     dipole_normalize=True, spherical=False,
+                     recompute_kernels=False, cv_idces_sets=None):
     # hardcoded for now, sorry (not sorry)
     atoms_filename_train = 'qm7_train.xyz'
     dipoles_filename_train = 'dipoles_train.npy'
     if recompute_kernels:
+        #TODO recompute vector kernels, if _independently_ requested
         if weight_tensor != 0.0:
             raise ValueError("Recomputing vector kernels is not yet supported")
         if cv_idces_sets is None:
@@ -347,7 +348,6 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                 n_max, l_max, atom_width, rad_r0, rad_m,
                 atoms_filename_train, atoms_filename_test,
                 n_sparse_envs, n_sparse_components, workdir)
-        #TODO recompute vector kernels, if _independently_ requested
     dipoles_train = np.load(os.path.join(workdir, dipoles_filename_train))
     geoms_train = ase.io.read(os.path.join(workdir, atoms_filename_train), ':')
     if dipole_normalize:
@@ -358,7 +358,8 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
     (scalar_kernel_sparse, scalar_kernel_transformed,
      tensor_kernel_sparse, tensor_kernel_transformed) = load_transform_kernels(
              workdir, geoms_train, weight_scalar, weight_tensor,
-             load_sparse=True, dipole_normalize=dipole_normalize)
+             load_sparse=True, dipole_normalize=dipole_normalize,
+             spherical=spherical)
     if cv_idces_sets is None:
         weights = compute_weights(
                 dipoles_train, charges_train,
@@ -383,7 +384,7 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
 #     that contains all the kernels and data necessary to do a fit
 def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
                            load_sparse=True, full_kernel_name='NM',
-                           dipole_normalize=True):
+                           dipole_normalize=True, spherical=False):
     if (weight_scalar == 0.0) and (weight_tensor == 0.0):
         raise ValueError("Can't have both scalar and tensor weights set "
                          "to zero")
@@ -399,6 +400,8 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
                 full_name=full_kernel_name)
         # Assume the convention for the scalar kernels is _not_ transposed
         n_sparse_envs = scalar_kernel_full_sparse.shape[1]
+    #TODO if we generate the vector kernel ourselves, we don't have to
+    #     infer the convention
     if weight_tensor != 0.0:
         (tensor_kernel_transposed,
          tensor_kernel_molecular) = infer_kernel_convention(
@@ -412,13 +415,13 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
             vector_kernel_molecular=tensor_kernel_molecular,
             transpose_scalar_kernel=False,
             transpose_vector_kernel=tensor_kernel_transposed,
-            dipole_normalize=dipole_normalize)
+            dipole_normalize=dipole_normalize, args.spherical)
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
     if load_sparse:
         scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
                 geoms, scalar_kernel_sparse, weight_scalar,
-                tensor_kernel_sparse, weight_tensor)
+                tensor_kernel_sparse, weight_tensor, args.spherical)
         return (scalar_kernel_sparse, scalar_kernel_transformed,
                 tensor_kernel_sparse, tensor_kernel_transformed)
     else:

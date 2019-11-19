@@ -78,6 +78,10 @@ parser.add_argument(
             " tensor kernel stored in molecular, rather than atomic, format? "
             "(i.e. are they pre-summed over the atoms in a molecule?) "
             "Note this option is compatible with -tk and -tvk.")
+parser.add_argument(
+    '-st', '--spherical-tensor-ordering', action='store_true',
+           dest='spherical', help="Transform the vector kernels from spherical"
+           " tensor to the internal Cartesian ordering")
 
 
 def load_kernels(args):
@@ -107,7 +111,7 @@ if __name__ == "__main__":
             tensor_kernel, args.tensor_weight, args.tensor_kernel_molecular,
             args.transpose_full_kernels,
             (args.transpose_full_kernels or args.transpose_vector_kernels),
-            args.dipole_normalized)
+            args.dipole_normalized, args.spherical)
     charges = get_charges(geometries)
     dipole_fext = os.path.splitext(args.dipoles)[1]
     if dipole_fext == '.npy':
