@@ -19,7 +19,6 @@ from .fitutils import (transform_kernels, transform_sparse_kernels,
 
 # PY2_EXEC = "/home/veit/miniconda3/envs/py2-compat/bin/python2"
 # SOAPFAST_PATH = "/home/veit/SOAPFAST/soapfast"
-logging.basicConfig()
 LOGGER = logging.getLogger(__name__)
 PY2_EXEC = os.environ.get('PY2_EXEC', 'python')
 SOAPFAST_PATH = os.environ.get('SOAPFAST_PATH', '')
