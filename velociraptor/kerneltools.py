@@ -109,8 +109,10 @@ def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
 
 
 def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
-                          ps0_second_name=None, kernel_name='K1_MM',
+                          ps0_second_name=None, scaling_file=None,
+                          kernel_name='K1_MM',
                           zeta=2, workdir=None):
+    #TODO this is getting ridiculous. Isn't there an os.path util for all these?
     if not os.path.dirname(ps_name):
         ps_name = os.path.join(workdir, ps_name)
     if not os.path.dirname(ps0_name):
@@ -119,6 +121,8 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
         ps_second_name = os.path.join(workdir, ps_second_name)
     if (ps0_second_name is not None) and not os.path.dirname(ps0_second_name):
         ps0_second_name = os.path.join(workdir, ps0_second_name)
+    if (scaling_file is not None) and not os.path.dirname(scaling_file):
+        scaling_file = os.path.join(workdir, scaling_file)
     if (ps_second_name is not None) and (ps0_second_name is None):
         raise ValueError("Must also provide a second lambda=0 powerspectrum if"
                          " providing a second lambda=1 powerspectrum")
@@ -127,14 +131,17 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
         ps0_files = [ps0_name, ps0_second_name]
     else:
         ps_files = [ps_name, ]
+        ps0_files = [ps0_name, ]
     kernel_args = ([
         PY2_EXEC,
         os.path.join(SOAPFAST_PATH, 'get_kernel.py'),
         '-z', str(zeta),
-        '-ps', ] + ps_files + ['-ps0',] + ps_files + [
+        '-ps', ] + ps_files + ['-ps0',] + ps0_files + [
         '-o', os.path.join(workdir, kernel_name)
     ])
-    LOGGER.info("Running: " + ' '.join(kernel_args))
+    if scaling_file is not None:
+        kernel_args.extend(['-s', scaling_file])
+    LOGGER.info("Running: ", *kernel_args)
     subprocess.run(kernel_args, check=True)
 
 
@@ -199,6 +206,7 @@ def recompute_vector_kernels(
     compute_vector_kernel(
             'PS1_train.npy', 'PS0_train.npy',
             'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
+            'PS1_train_natoms.npy',
             zeta=zeta, kernel_name='K1_NM', workdir=workdir)
     # test-train(sparse)
     if atoms_filename_test is not None:
