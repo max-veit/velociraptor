@@ -415,7 +415,7 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
             vector_kernel_molecular=tensor_kernel_molecular,
             transpose_scalar_kernel=False,
             transpose_vector_kernel=tensor_kernel_transposed,
-            dipole_normalize=dipole_normalize, args.spherical)
+            dipole_normalize=dipole_normalize, spherical=args.spherical)
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
     if load_sparse:
