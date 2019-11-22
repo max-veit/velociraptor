@@ -332,10 +332,9 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                      charge_reg, weight_scalar, weight_tensor, workdir,
                      n_sparse_envs=2000, n_sparse_components=500,
                      dipole_normalize=True, spherical=False,
-                     recompute_kernels=False, cv_idces_sets=None):
-    # hardcoded for now, sorry (not sorry)
-    atoms_filename_train = 'qm7_train.xyz'
-    dipoles_filename_train = 'dipoles_train.npy'
+                     recompute_kernels=False, cv_idces_sets=None,
+                     geoms_train=None, dipoles_train=None, geoms_test=None,
+                     dipoles_test=None, write_results=True):
     if recompute_kernels:
         #TODO recompute vector kernels, if _independently_ requested
         if weight_tensor != 0.0:
@@ -348,8 +347,6 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                 n_max, l_max, atom_width, rad_r0, rad_m,
                 atoms_filename_train, atoms_filename_test,
                 n_sparse_envs, n_sparse_components, workdir)
-    dipoles_train = np.load(os.path.join(workdir, dipoles_filename_train))
-    geoms_train = ase.io.read(os.path.join(workdir, atoms_filename_train), ':')
     if dipole_normalize:
         natoms_train = np.array([geom.get_number_of_atoms()
                                  for geom in geoms_train])
@@ -370,14 +367,14 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                 charge_regularization=charge_reg, sparse_jitter=0.0)
         return compute_residual_from_weights(
                 weights, weight_scalar, weight_tensor, dipole_normalize,
-                workdir)
+                workdir, write_results)
     else:
         return compute_cv_residual(
                 scalar_kernel_sparse, scalar_kernel_transformed,
                 tensor_kernel_sparse, tensor_kernel_transformed,
                 geoms_train, dipoles_train, charges_train,
                 dipole_reg, charge_reg, weight_scalar, weight_tensor,
-                cv_idces_sets, workdir, dipole_normalize)
+                cv_idces_sets, workdir, dipole_normalize, write_results)
 
 
 #TODO this is looking more and more like a constructor for a fitting class
@@ -457,7 +454,7 @@ def compute_cv_residual(
                 charge_regularization=charge_reg, sparse_jitter=0.0)
         if write_results:
             np.save(os.path.join(
-                workdir, 'cv_{:d}_weights.npz'.format(cv_num)), weights)
+                workdir, 'cv_{:d}_weights.npy'.format(cv_num)), weights)
         (dipoles_test, charges_test, geoms_test,
          scalar_kernel_test, tensor_kernel_test) = cv_test
         natoms_test = [geom.get_number_of_atoms() for geom in geoms_test]
@@ -476,7 +473,8 @@ def compute_cv_residual(
 
 
 def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
-                                  dipole_normalize=True, workdir=None):
+                                  dipole_normalize=True, workdir=None,
+                                  write_results=True):
     dipoles_test = np.load(os.path.join(workdir, 'dipoles_test.npy'))
     geoms_test = ase.io.read(os.path.join(workdir, 'qm7_test.xyz'), ':')
     natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
@@ -487,11 +485,14 @@ def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
      tensor_kernel_test_transformed) = load_transform_kernels(
          workdir, geoms_test, weight_scalar, weight_tensor, load_sparse=False,
          full_kernel_name='TM', dipole_normalize=dipole_normalize)
+    write_residuals = (os.path.join(os.path.join(workdir, 'test_residuals.npz')
+                       if write_results else None))
     resids = compute_residuals(
             weights, dipoles_test, charges_test, natoms_test,
             scalar_kernel_test_transformed, tensor_kernel_test_transformed,
             scalar_weight=weight_scalar, tensor_weight=weight_tensor,
-            charge_mode='fit', dipole_normalized=dipole_normalize)
+            charge_mode='fit', dipole_normalized=dipole_normalize,
+            write_residuals=write_residuals)
     LOGGER.info("Finished computing test residual: {:.6g}".format(
         resids['dipole_rmse']))
     return resids['dipole_rmse']

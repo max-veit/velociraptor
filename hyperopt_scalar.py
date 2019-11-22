@@ -49,10 +49,15 @@ def compute_cv_error(params, n_max, l_max, workdir, cv_basename='cv'):
     for cv_idx in range(4):
         cv_idces_sets.append(np.load(os.path.join(
             "{:s}_{:d}".format(cv_basename, cv_idx), 'idces.npy')))
+    # hardcoded for now, sorry (not sorry)
+    atoms_filename_train = 'qm7_train.xyz'
+    dipoles_filename_train = 'dipoles_train.npy'
     result = compute_residual(n_max, l_max, atom_width, rad_r0, rad_m,
             dipole_reg, charge_reg, weight_scalar=1.0, weight_tensor=0.0,
             workdir=workdir, n_sparse_envs=2000, recompute_kernels=True,
-            dipole_normalize=False, cv_idces_sets=cv_idces_sets)
+            dipole_normalize=False, cv_idces_sets=cv_idces_sets,
+            geoms_train=ase.io.read(atoms_filename_train, ':'),
+            dipoles_train=np.load(dipoles_filename_train))
     LOGGER.info("CV residual is: {:.6f}".format(result))
     return result
 
