@@ -166,15 +166,18 @@ def compute_residuals(
                            np.array([scalar_kernel_transformed.shape[1]]))
     residuals = solvers.compute_residuals(
         weights, kernels, dipoles, natoms_list,
-        charges_test=charges_test, return_rmse=print_residuals,
+        charges_test=charges_test, return_rmse=True,
         intrinsic_dipole_std=intrinsic_variation,
         dipole_normalized=dipole_normalized)
-    if 'dipole_rmse' in residuals:
-        print("Dipole RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
-            residuals['dipole_rmse'], residuals['dipole_frac']))
-    if 'charge_rmse' in residuals:
-        print("Charge RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
-            residuals['charge_rmse'], residuals['charge_frac']))
+    if print_residuals:
+        if 'dipole_rmse' in residuals:
+            print(
+                "Dipole RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
+                    residuals['dipole_rmse'], residuals['dipole_frac']))
+        if 'charge_rmse' in residuals:
+            print(
+                "Charge RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
+                    residuals['charge_rmse'], residuals['charge_frac']))
     if write_residuals is not None:
         np.savez(write_residuals, **residuals)
     return residuals

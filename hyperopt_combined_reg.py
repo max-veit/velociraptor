@@ -28,9 +28,9 @@ def compute_cv_error(params, workdir=None, cv_basename='cv'):
     # we're not recomputing the kernel
     atoms_filename_train = 'qm7_train.xyz'
     dipoles_filename_train = 'dipoles_train.npy'
-    result = compute_residual(8, 6, 0.3, 2.5, 3.,
+    result = compute_residual(
             1.0, charge_reg, weight_scalar, weight_tensor,
-            workdir=workdir, n_sparse_envs=2000, recompute_kernels=False,
+            workdir=workdir, recompute_kernels=False,
             dipole_normalize=True, cv_idces_sets=cv_idces_sets,
             geoms_train=ase.io.read(atoms_filename_train, ':'),
             dipoles_train=np.load(dipoles_filename_train))

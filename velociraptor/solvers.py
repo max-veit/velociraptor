@@ -215,7 +215,10 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     # DANGER WILL ROBINSON: These residuals are either per-molecule or
     # normalized per atom, depending on the setting of dipole_normalized
     residuals_out['dipole_residuals'] = dipole_residuals
-    residuals_out['dipole_normalized'] = dipole_normalized
+    if dipole_normalized:
+        residuals_out['dipole_scaling'] = natoms_test
+    else:
+        residuals_out['dipole_scaling'] = np.ones(len(natoms_test))
     if return_rmse:
         if dipole_normalized:
             dipole_rmse = np.sqrt(np.sum(dipole_residuals**2) / n_test)

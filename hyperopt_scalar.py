@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import scipy.optimize
 
-from velociraptor.kerneltools import compute_residual
+from velociraptor.kerneltools import compute_residual, make_kernel_params
 
 logging.basicConfig()
 LOGGER = logging.getLogger(__name__)
@@ -52,9 +52,11 @@ def compute_cv_error(params, n_max, l_max, workdir, cv_basename='cv'):
     # hardcoded for now, sorry (not sorry)
     atoms_filename_train = 'qm7_train.xyz'
     dipoles_filename_train = 'dipoles_train.npy'
-    result = compute_residual(n_max, l_max, atom_width, rad_r0, rad_m,
+    kparams = make_kernel_params(n_max, l_max, atom_width, rad_r0, rad_m,
+                                 atoms_filename_train, n_sparse_envs=2000)
+    result = compute_residual(
             dipole_reg, charge_reg, weight_scalar=1.0, weight_tensor=0.0,
-            workdir=workdir, n_sparse_envs=2000, recompute_kernels=True,
+            workdir=workdir, recompute_kernels=True, kparams=kparams,
             dipole_normalize=False, cv_idces_sets=cv_idces_sets,
             geoms_train=ase.io.read(atoms_filename_train, ':'),
             dipoles_train=np.load(dipoles_filename_train))

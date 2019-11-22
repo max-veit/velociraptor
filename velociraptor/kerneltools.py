@@ -325,32 +325,45 @@ def infer_kernel_convention(kernel_shape, n_mol, n_sparse_envs):
     return transposed, molecular
 
 
+
+def make_kernel_params(n_max, l_max, atom_width, rad_r0, rad_m,
+                       atoms_filename_train, atoms_filename_test=None,
+                       n_sparse_envs=2000, n_sparse_components=500):
+    params = dict()
+    params['n_max'] = n_max
+    params['l_max'] = l_max
+    params['atom_width'] = atom_width
+    params['rad_r0'] = rad_r0
+    params['rad_m'] = rad_m
+    params['atoms_filename_train'] = atoms_filename_train
+    params['atoms_filename_test'] = atoms_filename_test
+    params['n_sparse_envs'] = n_sparse_envs
+    params['n_sparse_components'] = n_sparse_components
+    return params
+
+
 #TODO the kernel parameters aren't necessary if not recomputing the kernel,
 #     might as well make a separate function (or make these optional, to keep
 #     the interface)
-def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
-                     charge_reg, weight_scalar, weight_tensor, workdir,
-                     n_sparse_envs=2000, n_sparse_components=500,
+def compute_residual(dipole_reg, charge_reg, weight_scalar, weight_tensor,
+                     workdir, geoms_train, dipoles_train,
                      dipole_normalize=True, spherical=False,
-                     recompute_kernels=False, cv_idces_sets=None,
-                     geoms_train=None, dipoles_train=None, geoms_test=None,
-                     dipoles_test=None, write_results=True):
+                     recompute_kernels=True, kparams=None, cv_idces_sets=None,
+                     atoms_filename_test=None, dipoles_test=None,
+                     write_results=True, print_results=True):
     if recompute_kernels:
+        if cv_idces_sets is None:
+            kparams['atoms_filename_test'] = 'qm7_test.xyz'
+        else:
+            kparams['atoms_filename_test'] = None
         #TODO recompute vector kernels, if _independently_ requested
         if weight_tensor != 0.0:
             raise ValueError("Recomputing vector kernels is not yet supported")
-        if cv_idces_sets is None:
-            atoms_filename_test = 'qm7_test.xyz'
-        else:
-            atoms_filename_test = None
-        recompute_scalar_kernels(
-                n_max, l_max, atom_width, rad_r0, rad_m,
-                atoms_filename_train, atoms_filename_test,
-                n_sparse_envs, n_sparse_components, workdir)
+        if weight_scalar != 0.0:
+            recompute_scalar_kernels(**kparams, workdir=workdir)
     if dipole_normalize:
-        natoms_train = np.array([geom.get_number_of_atoms()
-                                 for geom in geoms_train])
-        dipoles_train = dipoles_train / natoms_train[:, np.newaxis]
+        natoms_train = [geom.get_number_of_atoms() for geom in geoms_train]
+        dipoles_train = (dipoles_train.T / natoms_train).T
     charges_train = get_charges(geoms_train)
     (scalar_kernel_sparse, scalar_kernel_transformed,
      tensor_kernel_sparse, tensor_kernel_transformed) = load_transform_kernels(
@@ -367,14 +380,15 @@ def compute_residual(n_max, l_max, atom_width, rad_r0, rad_m, dipole_reg,
                 charge_regularization=charge_reg, sparse_jitter=0.0)
         return compute_residual_from_weights(
                 weights, weight_scalar, weight_tensor, dipole_normalize,
-                workdir, write_results)
+                workdir, write_results, print_results)
     else:
         return compute_cv_residual(
                 scalar_kernel_sparse, scalar_kernel_transformed,
                 tensor_kernel_sparse, tensor_kernel_transformed,
                 geoms_train, dipoles_train, charges_train,
                 dipole_reg, charge_reg, weight_scalar, weight_tensor,
-                cv_idces_sets, workdir, dipole_normalize, write_results)
+                cv_idces_sets, workdir, dipole_normalize, write_results,
+                print_results)
 
 
 #TODO this is looking more and more like a constructor for a fitting class
@@ -412,13 +426,13 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
             vector_kernel_molecular=tensor_kernel_molecular,
             transpose_scalar_kernel=False,
             transpose_vector_kernel=tensor_kernel_transposed,
-            dipole_normalize=dipole_normalize, spherical=args.spherical)
+            dipole_normalize=dipole_normalize, spherical=spherical)
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
     if load_sparse:
         scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
                 geoms, scalar_kernel_sparse, weight_scalar,
-                tensor_kernel_sparse, weight_tensor, args.spherical)
+                tensor_kernel_sparse, weight_tensor, spherical)
         return (scalar_kernel_sparse, scalar_kernel_transformed,
                 tensor_kernel_sparse, tensor_kernel_transformed)
     else:
@@ -431,7 +445,7 @@ def compute_cv_residual(
         geoms, dipoles, charges, dipole_reg, charge_reg,
         weight_scalar, weight_tensor,
         cv_idces_sets, workdir, dipole_normalize=True,
-        write_results=True):
+        write_results=True, print_residuals=True):
     """Compute the CV residual by splitting the training data
 
     Uses kernels that have been pre-computed for the whole dataset
@@ -466,7 +480,8 @@ def compute_cv_residual(
                 scalar_kernel_test, tensor_kernel_test,
                 weight_scalar, weight_tensor, charge_mode='fit',
                 dipole_normalized=dipole_normalize,
-                write_residuals=write_residuals)['dipole_rmse']
+                write_residuals=write_residuals,
+                print_residuals=print_residuals)['dipole_rmse']
         LOGGER.info("Finished computing test residual: {:.6g}".format(resid))
         rmse_sum += resid
     return rmse_sum / len(cv_idces_sets)
@@ -474,7 +489,7 @@ def compute_cv_residual(
 
 def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
                                   dipole_normalize=True, workdir=None,
-                                  write_results=True):
+                                  write_results=True, print_residuals=True):
     dipoles_test = np.load(os.path.join(workdir, 'dipoles_test.npy'))
     geoms_test = ase.io.read(os.path.join(workdir, 'qm7_test.xyz'), ':')
     natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
@@ -492,8 +507,8 @@ def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
             scalar_kernel_test_transformed, tensor_kernel_test_transformed,
             scalar_weight=weight_scalar, tensor_weight=weight_tensor,
             charge_mode='fit', dipole_normalized=dipole_normalize,
-            write_residuals=write_residuals)
-    LOGGER.info("Finished computing test residual: {:.6g}".format(
+            write_residuals=write_residuals, print_residuals=print_residuals)
+    LOGGER.info("Finished computing test residual: {:.6f}".format(
         resids['dipole_rmse']))
     return resids['dipole_rmse']
 

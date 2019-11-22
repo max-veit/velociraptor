@@ -8,10 +8,12 @@ import os
 
 import ase.io
 import numpy as np
+from scipy import optimize
 
 from velociraptor.fitutils import (transform_kernels, transform_sparse_kernels,
                                    compute_weights, compute_residuals,
                                    get_charges)
+from velociraptor.kerneltools import make_kernel_params
 from velociraptor.kerneltools import compute_residual as kt_residual
 
 
@@ -104,6 +106,7 @@ parser.add_argument(
             " are interpreted relative to this directory if paths are not "
             "otherwise specified", default='.')
 
+
 def make_cv_sets(n_geoms, cv_num_partitions):
     idces_perm = np.random.permutation(n_geoms)
     idces_split = np.array_split(idces_perm, cv_num_partitions)
@@ -112,39 +115,91 @@ def make_cv_sets(n_geoms, cv_num_partitions):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    geoms = ase.io.read(args.geometries)
+    if not os.path.dirname(args.geometries):
+        geom_filename = os.path.join(args.working_directory, args.geometries)
+    else:
+        geom_filename = args.geometries
+    del args.geometries
     if args.num_training_geometries:
-        if len(args.num_training_geometries > 1):
+        if len(args.num_training_geometries) > 1:
             raise NotImplementedError("Learning curves not yet implemented")
         else:
             n_train = args.num_training_geometries[0]
-            geometries = ase.io.read(args.geometries, slice(0, n_train))
+            geometries = ase.io.read(geom_filename, slice(0, n_train))
+            fname_split = os.path.splitext(geom_filename)
+            geom_filename = "{:s}_nt{:d}{:s}".format(
+                    fname_split[0], n_train, fname_split[1])
+            ase.io.write(geom_filename, geometries)
     else:
-        geometries = ase.io.read(args.geometries, slice(None))
+        geometries = ase.io.read(geom_filename, slice(None))
         n_train = len(geometries)
-    if (args.optimize_charge_reg or arts.optimize_dipole_reg
-            or args.optimize_all):
-        raise NotImplementedError("Optimization not yet implemented")
     charges = get_charges(geometries)
     dipole_fext = os.path.splitext(args.dipoles)[1]
+    if not os.path.dirname(args.dipoles):
+        dipole_filename = os.path.join(args.working_directory, args.dipoles)
+    else:
+        dipole_filename = args.dipoles
+    del args.dipoles
     if dipole_fext == '.npy':
-        dipoles = np.load(args.dipoles)[:n_train]
+        dipoles = np.load(dipole_filename)[:n_train]
     elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
-        dipoles = np.loadtxt(args.dipoles)[:n_train]
+        dipoles = np.loadtxt(dipole_filename)[:n_train]
     else:
         logger.warn("Dipoles file has no filename extension; assuming "
                     "plain text.")
-        dipoles = np.loadtxt(args.dipoles)[:n_train]
-    del args.dipoles
+        dipoles = np.loadtxt(dipole_filename)[:n_train]
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     dipole_normalize = True # seems to be the best option
-    result = kt_residual(
+    cv_idces_sets = make_cv_sets(n_train, args.cv_num_partitions)
+    kparams = make_kernel_params(
         args.max_radial, args.max_angular, args.atom_sigma,
-        args.radial_scaling_scale, args.radial_scaling_power,
+        args.radial_scaling_scale, args.radial_scaling_power, geom_filename,
+        None, args.num_sparse_environments, args.num_sparse_features)
+    result = kt_residual(
         args.dipole_regularization, args.charge_regularization,
         args.scalar_weight, args.tensor_weight, args.working_directory,
-        args.num_sparse_environments, args.num_sparse_features,
-        dipole_normalize, True, True,
-        make_cv_sets(n_train, args.cv_num_partitions),
-        geometries, dipoles) # whew!
-
+        geometries, dipoles,
+        dipole_normalize, True, True, kparams, cv_idces_sets,
+        args.write_residuals) # whew!
+    if args.print_residuals:
+        print("CV-error: {:.6f} a.u. per atom".format(result))
+    if args.optimize_charge_reg or args.optimize_dipole_reg:
+        #TODO move into its own function
+        def result_function(dipole_reg_log, charge_reg_log):
+            return kt_residual(10**dipole_reg_log, 10**charge_reg_log,
+                               args.scalar_weight, args.tensor_weight,
+                               args.working_directory, geometries, dipoles,
+                               dipole_normalize, True, False, None,
+                               cv_idces_sets, write_results=False,
+                               print_results=False)
+        final_reg = np.array([args.dipole_regularization,
+                              args.charge_regularization])
+        if not args.optimize_charge_reg:
+            charge_reg_log = np.log10(args.charge_regularization)
+            result_1d = lambda x: result_function(x, charge_reg_log)
+            opt_result = optimize.minimize_scalar(result_1d)
+            final_reg[0] = 10**opt_result.x
+        elif not args.optimize_dipole_reg:
+            dipole_reg_log = np.log10(args.dipole_regularization)
+            result_1d = lambda x: result_function(dipole_reg_log, x)
+            opt_result = optimize.minimize_scalar(result_1d)
+            final_reg[1] = 10**opt_result.x
+        else:
+            result_2d = lambda x: result_function(*x)
+            opt_result = optimize.minimize(
+                    result_2d, (np.log10(args.dipole_regularization),
+                                np.log10(args.charge_regularization)),
+                    method='BFGS', options=dict(maxiter=100, disp=True))
+            final_reg = 10**opt_result.x
+        print(opt_result)
+        print("Final regularizer: " + np.array_str(final_reg, precision=6))
+        result = kt_residual(
+            final_reg[0], final_reg[1],
+            args.scalar_weight, args.tensor_weight, args.working_directory,
+            geometries, dipoles,
+            dipole_normalize, True, False, None, cv_idces_sets,
+            args.write_residuals) # whew!
+        if args.print_residuals:
+            print("Final CV-error: {:.6f} a.u. per atom".format(result))
+    if args.optimize_all:
+        raise NotImplementedError("Full optimization not yet implemented")
