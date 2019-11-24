@@ -17,7 +17,8 @@ from velociraptor.kerneltools import make_kernel_params
 from velociraptor.kerneltools import compute_residual as kt_residual
 
 
-logger = logging.getLogger(__name__)
+logging.basicConfig()
+LOGGER = logging.getLogger(__name__)
 
 
 parser = argparse.ArgumentParser(
@@ -164,7 +165,7 @@ if __name__ == "__main__":
     if args.print_residuals:
         print("CV-error: {:.6f} a.u. per atom".format(result))
     if args.optimize_charge_reg or args.optimize_dipole_reg:
-        #TODO move into its own function
+        #TODO move optimization into its own function (or even module)
         def result_function(dipole_reg_log, charge_reg_log):
             return kt_residual(10**dipole_reg_log, 10**charge_reg_log,
                                args.scalar_weight, args.tensor_weight,

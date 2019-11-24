@@ -196,7 +196,16 @@ def recompute_vector_kernels(
             atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
             n_sparse_components=n_sparse_components)
-    # Make sure feat sparsification uses the PS1_train values!
+    # Scalar power spectra are also needed for nonlinear vector kernels
+    # Different name than for scalar kernels because the optimal
+    # parameters for the two kernels will usually be different
+    compute_power_spectra(
+            n_max, l_max, atom_width, rad_r0, rad_m, lambda_=0,
+            ps_prefix='PS0v_train',
+            atoms_file=atoms_filename_train, workdir=workdir,
+            n_sparse_envs=n_sparse_envs,
+            n_sparse_components=n_sparse_components)
+    # Make sure feat sparsification for test uses the train values!
     # (and don't sparsify on envs)
     if atoms_filename_test is not None:
         compute_power_spectra(
@@ -204,33 +213,37 @@ def recompute_vector_kernels(
                 ps_prefix='PS1_test',
                 atoms_file=atoms_filename_test, workdir=workdir,
                 feat_sparsefile='PS1_train', n_sparse_envs=-1)
+        compute_power_spectra(
+                n_max, l_max, atom_width, rad_r0, rad_m, lambda_=0,
+                ps_prefix='PS0v_test',
+                atoms_file=atoms_filename_test, workdir=workdir,
+                feat_sparsefile='PS0v_train', n_sparse_envs=-1)
     # compute kernels (soapfast)
     zeta = 2 # possibly another parameter to gridsearch
     # sparse-sparse
     compute_vector_kernel('PS1_train_atomic_sparse.npy',
-                          'PS0_train_atomic_sparse.npy', kernel_name='K1_MM',
+                          'PS0v_train_atomic_sparse.npy', kernel_name='K1_MM',
                           zeta=zeta, workdir=workdir)
     # full-sparse
     compute_vector_kernel(
-            'PS1_train.npy', 'PS0_train.npy',
-            'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
+            'PS1_train.npy', 'PS0v_train.npy',
+            'PS1_train_atomic_sparse.npy', 'PS0v_train_atomic_sparse.npy',
             'PS1_train_natoms.npy',
             zeta=zeta, kernel_name='K1_NM', workdir=workdir)
     # test-train(sparse)
     if atoms_filename_test is not None:
         compute_vector_kernel(
-                'PS1_test.npy', 'PS0_test.npy',
-                'PS1_train_atomic_sparse.npy', 'PS0_train_atomic_sparse.npy',
+                'PS1_test.npy', 'PS0v_test.npy',
+                'PS1_train_atomic_sparse.npy', 'PS0v_train_atomic_sparse.npy',
                 'PS1_test_natoms.npy',
                 zeta=zeta, kernel_name='K1_MT', workdir=workdir)
-    #TODO transform spherical to Cartesian kernels!
 
 
 #TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
 #     just in a different guise with different arguments (which are really just
 #     presets).  Fix?
 def load_kernels(workdir, weight_scalar, weight_tensor, full_name='NM',
-                 load_sparse=True, sparse_name='MM'):
+                 load_sparse=True, sparse_name='MM', spherical=False):
     if weight_scalar != 0.0:
         if load_sparse:
             scalar_kernel_sparse = np.load(
@@ -241,11 +254,16 @@ def load_kernels(workdir, weight_scalar, weight_tensor, full_name='NM',
         scalar_kernel_sparse = np.array([])
         scalar_kernel_full_sparse = np.array([])
     if weight_tensor != 0.0:
+        if spherical:
+            vector_kernel_name = 'K1_{:s}.npy'
+        else:
+            vector_kernel_name = 'Kvec_{:s}.npy'
         if load_sparse:
             tensor_kernel_sparse = np.load(
-                    os.path.join(workdir, 'Kvec_{:s}.npy'.format(sparse_name)))
+                    os.path.join(workdir,
+                                 vector_kernel_name.format(sparse_name)))
         tensor_kernel_full_sparse = np.load(
-                os.path.join(workdir, 'Kvec_{:s}.npy'.format(full_name)))
+                os.path.join(workdir, vector_kernel_name.format(full_name)))
     else:
         tensor_kernel_sparse = np.array([])
         tensor_kernel_full_sparse = np.array([])
@@ -325,7 +343,6 @@ def infer_kernel_convention(kernel_shape, n_mol, n_sparse_envs):
     return transposed, molecular
 
 
-
 def make_kernel_params(n_max, l_max, atom_width, rad_r0, rad_m,
                        atoms_filename_train, atoms_filename_test=None,
                        n_sparse_envs=2000, n_sparse_components=500):
@@ -342,9 +359,6 @@ def make_kernel_params(n_max, l_max, atom_width, rad_r0, rad_m,
     return params
 
 
-#TODO the kernel parameters aren't necessary if not recomputing the kernel,
-#     might as well make a separate function (or make these optional, to keep
-#     the interface)
 def compute_residual(dipole_reg, charge_reg, weight_scalar, weight_tensor,
                      workdir, geoms_train, dipoles_train,
                      dipole_normalize=True, spherical=False,
@@ -356,11 +370,10 @@ def compute_residual(dipole_reg, charge_reg, weight_scalar, weight_tensor,
             kparams['atoms_filename_test'] = 'qm7_test.xyz'
         else:
             kparams['atoms_filename_test'] = None
-        #TODO recompute vector kernels, if _independently_ requested
-        if weight_tensor != 0.0:
-            raise ValueError("Recomputing vector kernels is not yet supported")
         if weight_scalar != 0.0:
             recompute_scalar_kernels(**kparams, workdir=workdir)
+        if weight_tensor != 0.0:
+            recompute_vector_kernels(**kparams, workdir=workdir)
     if dipole_normalize:
         natoms_train = [geom.get_number_of_atoms() for geom in geoms_train]
         dipoles_train = (dipoles_train.T / natoms_train).T
@@ -403,16 +416,16 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
         (scalar_kernel_sparse, scalar_kernel_full_sparse,
          tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(
                 workdir, weight_scalar, weight_tensor, load_sparse=True,
-                full_name=full_kernel_name)
+                full_name=full_kernel_name, spherical=spherical)
         n_sparse_envs = scalar_kernel_sparse.shape[0]
     else:
         scalar_kernel_full_sparse, tensor_kernel_full_sparse = load_kernels(
                 workdir, weight_scalar, weight_tensor, load_sparse=False,
-                full_name=full_kernel_name)
+                full_name=full_kernel_name, spherical=spherical)
         # Assume the convention for the scalar kernels is _not_ transposed
         n_sparse_envs = scalar_kernel_full_sparse.shape[1]
     #TODO if we generate the vector kernel ourselves, we don't have to
-    #     infer the convention
+    #     infer the convention (though this should work just fine)
     if weight_tensor != 0.0:
         (tensor_kernel_transposed,
          tensor_kernel_molecular) = infer_kernel_convention(
