@@ -79,6 +79,12 @@ parser.add_argument(
             "more-or-less equal partitions and do cross validation with them",
             default=4)
 parser.add_argument(
+    '-cvf', '--cv-file', type=str, help="Use CV-indices from the given file, "
+            "which must be a NumPy array with 'k' sets of indices over the "
+            "first axis, denoting the points to be withheld as the test set. "
+            "If the file does not exist, it will be created as described "
+            "for 'k'.")
+parser.add_argument(
     '-orc', '--optimize-charge-reg', action='store_true', help="Optimize the "
             "CV-error w.r.t. the charge regularization?")
 parser.add_argument(
@@ -98,9 +104,9 @@ parser.add_argument(
     '-wr', '--write-residuals', action='store_true', help="Write the "
             "individual (non-RMSed) residuals to a file called "
             "'cv_<n>_residuals.npz' in the working directory.")
-parser.add_argument(
-    '-wk', '--save-kernels', metavar='PREFIX', help="Save the kernels to files"
-            " with the given prefix")
+#  parser.add_argument(
+    #  '-wk', '--save-kernels', metavar='PREFIX', help="Save the kernels to files"
+            #  " with the given prefix")
 parser.add_argument(
     '-wd', '--working-directory', metavar='DIR', help="Working directory for "
             "power spectrum and kernel computations (geometry and dipole files"
@@ -151,7 +157,20 @@ if __name__ == "__main__":
         dipoles = np.loadtxt(dipole_filename)[:n_train]
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     dipole_normalize = True # seems to be the best option
-    cv_idces_sets = make_cv_sets(n_train, args.cv_num_partitions)
+    if args.cv_file is not None:
+        try:
+            cv_idces_sets = np.load(args.cv_file)
+            if len(cv_idces_sets) != args.cv_num_partitions:
+                LOGGER.warn("Different number of CV-partitions specified in "
+                            "the file ({:d}) and on the command line ({:d}); "
+                            "using the file setting",
+                            len(cv_idces_sets), args.cv_num_partitions)
+        except FileNotFoundError:
+            LOGGER.info("CV-file not found, creating new CV-partition...")
+            cv_idces_sets = make_cv_sets(n_train, args.cv_num_partitions)
+            np.save(args.cv_file, cv_idces_sets)
+    else:
+        cv_idces_sets = make_cv_sets(n_train, args.cv_num_partitions)
     kparams = make_kernel_params(
         args.max_radial, args.max_angular, args.atom_sigma,
         args.radial_scaling_scale, args.radial_scaling_power, geom_filename,
