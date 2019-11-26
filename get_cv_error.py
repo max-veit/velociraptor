@@ -148,7 +148,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                                          kparams_initial['rad_r0'],
                                          kparams_initial['rad_m'])))
         opt_result = optimize.minimize(result_function, initial_params,
-                                       method='BFGS', options=dict(
+                                       method='Nelder-Mead', options=dict(
                                            maxiter=100, disp=True))
         final_params = opt_result.x
         final_params[:2] = 10**final_params[:2]
