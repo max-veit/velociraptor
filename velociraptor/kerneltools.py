@@ -313,29 +313,22 @@ def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
              scalar_kernel_train, tensor_kernel_train))
 
 
-def infer_kernel_convention(kernel_shape, n_mol, n_sparse_envs):
+def infer_kernel_convention(kernel_shape, n_mol, n_atoms):
     # defaults
     transposed = False
     molecular = False
-    if kernel_shape[0] == n_sparse_envs:
-        if kernel_shape[1] == n_sparse_envs:
-            LOGGER.warn(
-                "Cannot infer whether kernel is transposed. (Are you sure "
-                "this is the full-sparse and not the sparse-sparse kernel?) "
-                "Using the default of False (kernel is NM-shaped).")
-        elif kernel_shape[1] == n_mol:
-            LOGGER.info("Assuming kernel is molecular and transposed.")
-            transposed = True
-            molecular = True
-        else:
-            LOGGER.info("Assuming kernel is atomic and transposed.")
-            transposed = True
-    elif kernel_shape[1] == n_sparse_envs:
-        if kernel_shape[0] == n_mol:
-            LOGGER.info("Assuming kernel is molecular and _not_ transposed.")
-            molecular = True
-        else:
-            LOGGER.info("Assuming kernel is atomic and _not_ transposed.")
+    if kernel_shape[0] == n_mol:
+        LOGGER.info("Assuming kernel is molecular and not transposed.")
+        molecular = True
+    elif kernel_shape[0] == n_atoms:
+        LOGGER.info("Assuming kernel is atomic and not transposed.")
+    elif kernel_shape[1] == n_mol:
+        LOGGER.info("Assuming kernel is molecular and transposed.")
+        transposed = True
+        molecular = True
+    elif kernel_shape[1] == n_atoms:
+        LOGGER.info("Assuming kernel is atomic and transposed.")
+        transposed = True
     else:
         LOGGER.warn("Kernel shape: " + str(kernel_shape) + "unrecognized and "
                     "likely wrong! Using default settings, but expect shape "
@@ -417,19 +410,17 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
          tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(
                 workdir, weight_scalar, weight_tensor, load_sparse=True,
                 full_name=full_kernel_name, spherical=spherical)
-        n_sparse_envs = scalar_kernel_sparse.shape[0]
     else:
         scalar_kernel_full_sparse, tensor_kernel_full_sparse = load_kernels(
                 workdir, weight_scalar, weight_tensor, load_sparse=False,
                 full_name=full_kernel_name, spherical=spherical)
-        # Assume the convention for the scalar kernels is _not_ transposed
-        n_sparse_envs = scalar_kernel_full_sparse.shape[1]
     #TODO if we generate the vector kernel ourselves, we don't have to
     #     infer the convention (though this should work just fine)
     if weight_tensor != 0.0:
         (tensor_kernel_transposed,
          tensor_kernel_molecular) = infer_kernel_convention(
-                tensor_kernel_full_sparse.shape, len(geoms), n_sparse_envs)
+                tensor_kernel_full_sparse.shape, len(geoms),
+                sum(geom.get_number_of_atoms() for geom in geoms))
     else:
         tensor_kernel_transposed = False
         tensor_kernel_molecular = False
