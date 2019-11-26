@@ -46,7 +46,7 @@ def compute_power_spectra(
     ])
     if feat_sparsefile is not None:
         ps_args.extend(['-sf', os.path.join(workdir, feat_sparsefile)])
-    LOGGER.info("Running: ", *ps_args)
+    LOGGER.info("Running: " + ' '.join(ps_args))
     subprocess.run(ps_args, check=True)
 
     # ATOMIC POWER spectra!
@@ -149,7 +149,7 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
             kernel_args.extend(['-s', scaling_file, scaling_file_second])
     elif (scaling_file_second is not None):
         kernel_args.extend(['-s', 'NONE', scaling_file_second])
-    LOGGER.info("Running: ", *kernel_args)
+    LOGGER.info("Running: " + ' '.join(kernel_args))
     subprocess.run(kernel_args, check=True)
 
 
