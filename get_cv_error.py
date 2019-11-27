@@ -126,68 +126,86 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                     optimize_kparams, optimize_dreg, optimize_creg,
                     geometries, dipoles, workdir, cv_idces_sets,
                     dipole_normalize=True):
+
     if cv_idces_sets is None:
         LOGGER.error("Requested optimization with no cross-validation. "
                      "This is almost certainly a bad idea.")
     # Optimizing kernel params implies optimizing regularizers
+    #TODO redo this without weird functional closures and shadowing
+    def optimize_regularizers(dipole_reg_initial, charge_reg_initial,
+                              optimize_dreg, optimize_creg):
+        def objective_no_recompute(dipole_reg_log, charge_reg_log):
+            return kt_residual(10**dipole_reg_log, 10**charge_reg_log,
+                               scalar_weight, tensor_weight,
+                               workdir, geometries, dipoles,
+                               dipole_normalize, True, False, None,
+                               cv_idces_sets, write_results=False,
+                               print_results=False)
+        final_reg = np.array([dipole_reg_initial, charge_reg_initial])
+        if not args.optimize_charge_reg:
+            charge_reg_log = np.log10(charge_reg_initial)
+            result_1d = lambda x: objective_no_recompute(x, charge_reg_log)
+            opt_result = optimize.minimize_scalar(result_1d)
+            final_reg[0] = 10**opt_result.x
+        elif not args.optimize_dipole_reg:
+            dipole_reg_log = np.log10(dipole_reg_initial)
+            result_1d = lambda x: objective_no_recompute(dipole_reg_log, x)
+            opt_result = optimize.minimize_scalar(result_1d)
+            final_reg[1] = 10**opt_result.x
+        else:
+            result_2d = lambda x: objective_no_recompute(*x)
+            opt_result = optimize.minimize(
+                    result_2d, (np.log10(dipole_reg_initial),
+                                np.log10(charge_reg_initial)),
+                    method='Nelder-Mead',
+                    options=dict(maxiter=100, xatol=1e-2))
+            final_reg = 10**opt_result.x
+        print(opt_result)
+        print("Final regularizer: " + np.array_str(final_reg, precision=6))
+        return final_reg, opt_result.fun
+
     if optimize_kparams:
-        def result_function(test_params):
-            (dipole_reg_log, charge_reg_log,
-             atom_width, rad_r0, rad_m) = test_params
+        dipole_reg_last = dipole_reg_initial
+        charge_reg_last = charge_reg_initial
+        def objective(test_params):
+            LOGGER.info("Trying params: " + str(test_params))
+            (atom_width, rad_r0, rad_m) = test_params
             kparams = dict(kparams_initial)
             kparams['atom_width'] = atom_width
             kparams['rad_r0'] = rad_r0
             kparams['rad_m'] = rad_m
-            return kt_residual(
-                    10**dipole_reg_log, 10**charge_reg_log, scalar_weight,
+            nonlocal dipole_reg_last
+            nonlocal charge_reg_last
+            resid_first = kt_residual(
+                    dipole_reg_last, charge_reg_last, scalar_weight,
                     tensor_weight, workdir, geometries, dipoles,
                     dipole_normalize, True, True, kparams, cv_idces_sets,
                     write_results=False, print_results=False)
+            final_reg, result = optimize_regularizers(
+                    dipole_reg_last, charge_reg_last, True, True)
+            dipole_reg_last, charge_reg_last = final_reg
+            return result
         final_reg = np.array([dipole_reg_initial, charge_reg_initial])
-        initial_params = np.concatenate((np.log10(final_reg),
-                                        (kparams_initial['atom_width'],
-                                         kparams_initial['rad_r0'],
-                                         kparams_initial['rad_m'])))
-        opt_result = optimize.minimize(result_function, initial_params,
+        initial_params = np.array((kparams_initial['atom_width'],
+                                   kparams_initial['rad_r0'],
+                                   kparams_initial['rad_m']))
+        opt_result = optimize.minimize(objective, initial_params,
                                        method='Nelder-Mead', options=dict(
-                                           maxiter=100, disp=True))
+                                           maxiter=2, xatol=1e-2))
+        print(opt_result)
         final_params = opt_result.x
-        final_params[:2] = 10**final_params[:2]
-        print(opt_result)
-        print("Final parameters: " + np.array_str(final_params, precision=6))
-        kparams_initial['atom_width'] = final_params[2]
-        kparams_initial['rad_r0'] = final_params[3]
-        kparams_initial['rad_m'] = final_params[4]
-        final_reg = final_params[:2]
+        final_reg = np.array([dipole_reg_last, charge_reg_last])
+        print("Final kernel parameters: " + np.array_str(final_params,
+                                                         precision=6))
+        print("Final (final) regularizer: " + np.array_str(final_reg,
+                                                           precision=6))
+        kparams_initial['atom_width'] = final_params[0]
+        kparams_initial['rad_r0'] = final_params[1]
+        kparams_initial['rad_m'] = final_params[2]
     elif optimize_dreg or optimize_creg:
-        def result_function(dipole_reg_log, charge_reg_log):
-            return kt_residual(10**dipole_reg_log, 10**charge_reg_log,
-                               args.scalar_weight, args.tensor_weight,
-                               args.working_directory, geometries, dipoles,
-                               dipole_normalize, True, False, None,
-                               cv_idces_sets, write_results=False,
-                               print_results=False)
-        final_reg = np.array([args.dipole_regularization,
-                              args.charge_regularization])
-        if not args.optimize_charge_reg:
-            charge_reg_log = np.log10(args.charge_regularization)
-            result_1d = lambda x: result_function(x, charge_reg_log)
-            opt_result = optimize.minimize_scalar(result_1d)
-            final_reg[0] = 10**opt_result.x
-        elif not args.optimize_dipole_reg:
-            dipole_reg_log = np.log10(args.dipole_regularization)
-            result_1d = lambda x: result_function(dipole_reg_log, x)
-            opt_result = optimize.minimize_scalar(result_1d)
-            final_reg[1] = 10**opt_result.x
-        else:
-            result_2d = lambda x: result_function(*x)
-            opt_result = optimize.minimize(
-                    result_2d, (np.log10(args.dipole_regularization),
-                                np.log10(args.charge_regularization)),
-                    method='BFGS', options=dict(maxiter=100, disp=True))
-            final_reg = 10**opt_result.x
-        print(opt_result)
-        print("Final regularizer: " + np.array_str(final_reg, precision=6))
+        final_reg, fval = optimize_regularizers(
+                dipole_reg_initial, charge_reg_initial,
+                optimize_dreg, optimize_creg)
     else:
         LOGGER.error("No optimization requested.")
         return None
