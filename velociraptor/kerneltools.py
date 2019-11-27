@@ -8,6 +8,7 @@ the process level; this is not much of a problem in practice.
 
 
 import logging
+from math import sqrt
 import os
 import subprocess
 
@@ -460,6 +461,7 @@ def compute_cv_residual(
         raise ValueError("Can't have both scalar and tensor weights set "
                          "to zero")
     rmse_sum = 0.0
+    rmse_sum_sq = 0.0
     for cv_num, cv_idces in enumerate(cv_idces_sets):
         cv_test, cv_train = do_cv_split(scalar_kernel_transformed,
                                         tensor_kernel_transformed,
@@ -488,9 +490,15 @@ def compute_cv_residual(
                 dipole_normalized=dipole_normalize,
                 write_residuals=write_residuals,
                 print_residuals=print_residuals)['dipole_rmse']
-        LOGGER.info("Finished computing test residual: {:.6g}".format(resid))
+        LOGGER.debug("Finished computing test residual: {:.6g}".format(resid))
         rmse_sum += resid
-    return rmse_sum / len(cv_idces_sets)
+        rmse_sum_sq += resid**2
+    n_cv = len(cv_idces_sets)
+    cv_error = rmse_sum / n_cv
+    cv_stdev = sqrt(rmse_sum_sq/(n_cv - 1) - rmse_sum**2/(n_cv * (n_cv - 1)))
+    LOGGER.info("CV-error:       {:.6g}".format(cv_error))
+    LOGGER.info("CV-error stdev: {:.3g}".format(cv_stdev))
+    return cv_error
 
 
 def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
