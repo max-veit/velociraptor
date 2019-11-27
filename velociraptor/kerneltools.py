@@ -18,54 +18,58 @@ from .fitutils import (transform_kernels, transform_sparse_kernels,
                        compute_weights, compute_residuals, get_charges)
 
 # PY2_EXEC = "/home/veit/miniconda3/envs/py2-compat/bin/python2"
-# SOAPFAST_PATH = "/home/veit/SOAPFAST/soapfast"
 LOGGER = logging.getLogger(__name__)
-PY2_EXEC = os.environ.get('PY2_EXEC', 'python')
-SOAPFAST_PATH = os.environ.get('SOAPFAST_PATH', '')
+PY2_EXEC = os.environ.get('PY2_EXEC', 'python2.7')
+PY2_DIR = os.environ.get('PY2_DIR', os.path.dirname(os.path.dirname(PY2_EXEC)))
+PY2_ENV = dict(os.environ)
+PY2_ENV['PATH'] = os.path.join(PY2_DIR, 'bin') + ':' + PY2_ENV.get('PATH', '')
+PY2_ENV['PYTHONPATH'] = (
+    os.path.join(PY2_DIR, 'lib', 'python2.7', 'site-packages') +
+    ':' + PY2_ENV.get('PYTHONPATH', ''))
+NCPUS = int(os.environ.get('SLURM_CPUS_PER_TASK', 8))
 
 
 def compute_power_spectra(
         n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS', lambda_=0,
         atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
-        n_sparse_components=500, feat_sparsefile=None):
+        n_sparse_components=500, feat_sparsefile=None,
+        species_list='H C N O S Cl'.split()):
     # These PS parameters are unlikely to change
     rad_c = 1
     r_cut = 5.0
     if not os.path.dirname(atoms_file):
         atoms_file = os.path.join(workdir, atoms_file)
+    # This assumes SOAPFAST/bin is in PATH
+    # Aaaand it needs SOAPFAST/scripts too.
     ps_args = ([
-        PY2_EXEC,
-        os.path.join(SOAPFAST_PATH, 'get_power_spectrum.py'),
-        '-f', atoms_file,
+        'sagpr_parallel_get_PS',
+        '-f', atoms_file, '-nrun', str(NCPUS),
+        '-lm', str(lambda_), '-nc', str(n_sparse_components),
         '-n', str(n_max), '-l', str(l_max), '-rc', str(r_cut),
         '-sg', str(atom_width),
-        '-c',] + 'H C N O S Cl'.split() + ['-s',] + 'H C N O S Cl'.split() + [
-        '-lm', str(lambda_), '-nc', str(n_sparse_components),
+        '-c',] + species_list + ['-s',] + species_list + [
         '-rs', str(rad_c), str(rad_r0), str(rad_m),
         '-o', os.path.join(workdir, ps_prefix)
     ])
     if feat_sparsefile is not None:
         ps_args.extend(['-sf', os.path.join(workdir, feat_sparsefile)])
     LOGGER.info("Running: " + ' '.join(ps_args))
-    subprocess.run(ps_args, check=True)
+    subprocess.run(ps_args, env=PY2_ENV, check=True)
 
     # ATOMIC POWER spectra!
     atomic_ps_args = [
-        PY2_EXEC,
-        os.path.join(SOAPFAST_PATH, 'scripts',
-                     'get_atomic_power_spectrum.py'),
+        'get_atomic_power_spectrum.py',
         '-p', os.path.join(workdir, ps_prefix + '.npy'),
         '-f', atoms_file,
         '-o', os.path.join(workdir, ps_prefix + '_atomic')
     ]
     LOGGER.info("Running: " + ' '.join(atomic_ps_args))
-    subprocess.run(atomic_ps_args, check=True)
+    subprocess.run(atomic_ps_args, env=PY2_ENV, check=True)
 
     # sparsify kernels (soapfast)
     if (n_sparse_envs is not None) and (n_sparse_envs > 0):
         fps_args = [
-            PY2_EXEC,
-            os.path.join(SOAPFAST_PATH, 'scripts', 'do_fps.py'),
+            'sagpr_do_env_fps',
             '-p', os.path.join(workdir, ps_prefix + '_atomic.npy'),
             #'-s', os.path.join(workdir, ps_prefix + '_natoms.npy'),
             '-n', str(n_sparse_envs),
@@ -73,7 +77,7 @@ def compute_power_spectra(
             '-a', os.path.join(workdir, ps_prefix + '_atomic_sparse')
         ]
         LOGGER.info("Running: " + ' '.join(fps_args))
-        subprocess.run(fps_args, check=True)
+        subprocess.run(fps_args, env=PY2_ENV, check=True)
 
 
 def compute_scalar_power_spectra(
@@ -98,14 +102,13 @@ def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
     else:
         ps_files = [ps_name, ]
     kernel_args = ([
-        PY2_EXEC,
-        os.path.join(SOAPFAST_PATH, 'get_kernel.py'),
+        'sagpr_get_kernel',
         '-z', str(zeta),
         '-ps', ] + ps_files + ['-ps0',] + ps_files + [
         '-o', os.path.join(workdir, kernel_name)
     ])
     LOGGER.info("Running: " + ' '.join(kernel_args))
-    subprocess.run(kernel_args, check=True)
+    subprocess.run(kernel_args, env=PY2_ENV, check=True)
 
 
 def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
@@ -134,8 +137,7 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
         ps_files = [ps_name, ]
         ps0_files = [ps0_name, ]
     kernel_args = ([
-        PY2_EXEC,
-        os.path.join(SOAPFAST_PATH, 'get_kernel.py'),
+        'sagpr_get_kernel',
         '-z', str(zeta),
         '-ps', ] + ps_files + ['-ps0',] + ps0_files + [
         '-o', os.path.join(workdir, kernel_name)
@@ -150,7 +152,7 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
     elif (scaling_file_second is not None):
         kernel_args.extend(['-s', 'NONE', scaling_file_second])
     LOGGER.info("Running: " + ' '.join(kernel_args))
-    subprocess.run(kernel_args, check=True)
+    subprocess.run(kernel_args, env=PY2_ENV, check=True)
 
 
 def recompute_scalar_kernels(

@@ -104,14 +104,15 @@ parser.add_argument(
     '-wr', '--write-residuals', action='store_true', help="Write the "
             "individual (non-RMSed) residuals to a file called "
             "'cv_<n>_residuals.npz' in the working directory.")
-#  parser.add_argument(
-    #  '-wk', '--save-kernels', metavar='PREFIX', help="Save the kernels to files"
-            #  " with the given prefix")
 parser.add_argument(
     '-wd', '--working-directory', metavar='DIR', help="Working directory for "
             "power spectrum and kernel computations (geometry and dipole files"
             " are interpreted relative to this directory if paths are not "
             "otherwise specified", default='.')
+parser.add_argument(
+    '-p', '--n-processes', metavar='N', type=int, help="Number of parallel "
+            "processes to use for computing the power spectrum (default is to "
+            "let slurm decide)")
 
 
 def make_cv_sets(n_geoms, cv_num_partitions):
@@ -195,6 +196,8 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
 
 if __name__ == "__main__":
     args = parser.parse_args()
+    if args.n_processes is not None:
+        kerneltools.NCPUS = args.n_processes
     if not os.path.dirname(args.geometries):
         geom_filename = os.path.join(args.working_directory, args.geometries)
     else:
