@@ -191,7 +191,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                                    kparams_initial['rad_m']))
         opt_result = optimize.minimize(objective, initial_params,
                                        method='Nelder-Mead', options=dict(
-                                           maxiter=2, xatol=1e-2))
+                                           maxiter=100, xatol=1e-2))
         print(opt_result)
         final_params = opt_result.x
         final_reg = np.array([dipole_reg_last, charge_reg_last])
