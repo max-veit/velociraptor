@@ -130,10 +130,18 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
     if cv_idces_sets is None:
         LOGGER.error("Requested optimization with no cross-validation. "
                      "This is almost certainly a bad idea.")
+    if optimize_kparams:
+        # For tensor-only kernels, the charge regularization is ignored --
+        # so don't try to optimize it!
+        if scalar_weight == 0:
+            optimize_dreg = True
+            optimize_creg = False
+        else:
+            optimize_dreg = True
+            optimize_creg = True
     # Optimizing kernel params implies optimizing regularizers
     #TODO redo this without weird functional closures and shadowing
-    def optimize_regularizers(dipole_reg_initial, charge_reg_initial,
-                              optimize_dreg, optimize_creg):
+    def optimize_regularizers(dipole_reg_initial, charge_reg_initial):
         def objective_no_recompute(dipole_reg_log, charge_reg_log):
             return kt_residual(10**dipole_reg_log, 10**charge_reg_log,
                                scalar_weight, tensor_weight,
@@ -142,12 +150,12 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                                cv_idces_sets, write_results=False,
                                print_results=False)
         final_reg = np.array([dipole_reg_initial, charge_reg_initial])
-        if not args.optimize_charge_reg:
+        if not optimize_creg:
             charge_reg_log = np.log10(charge_reg_initial)
             result_1d = lambda x: objective_no_recompute(x, charge_reg_log)
             opt_result = optimize.minimize_scalar(result_1d)
             final_reg[0] = 10**opt_result.x
-        elif not args.optimize_dipole_reg:
+        elif not optimize_dreg:
             dipole_reg_log = np.log10(dipole_reg_initial)
             result_1d = lambda x: objective_no_recompute(dipole_reg_log, x)
             opt_result = optimize.minimize_scalar(result_1d)
@@ -182,7 +190,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                     dipole_normalize, True, True, kparams, cv_idces_sets,
                     write_results=False, print_results=False)
             final_reg, result = optimize_regularizers(
-                    dipole_reg_last, charge_reg_last, True, True)
+                    dipole_reg_last, charge_reg_last)
             dipole_reg_last, charge_reg_last = final_reg
             return result
         final_reg = np.array([dipole_reg_initial, charge_reg_initial])
@@ -204,8 +212,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         kparams_initial['rad_m'] = final_params[2]
     elif optimize_dreg or optimize_creg:
         final_reg, fval = optimize_regularizers(
-                dipole_reg_initial, charge_reg_initial,
-                optimize_dreg, optimize_creg)
+                dipole_reg_initial, charge_reg_initial)
     else:
         LOGGER.error("No optimization requested.")
         return None
