@@ -135,6 +135,7 @@ def load_detect_matrix(filename):
         logger.warning("Matrix file {:s} has unrecognized or missing filename "
                        "extension; assuming plain text.".format(filename))
         matrix = np.loadtxt(filename)
+    return matrix
 
 
 def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
