@@ -303,8 +303,8 @@ if __name__ == "__main__":
                 args.scalar_weight, args.tensor_weight,
                 args.optimize_all, args.optimize_dipole_reg,
                 args.optimize_charge_reg,
-                dipole_normalize, args.kparams_init_simplex)
                 geometries, dipoles, args.working_directory, cv_idces_sets,
+                dipole_normalize, args.kparams_init_simplex)
         kparams_final, final_reg = opt_results
         # probably don't need to recompute kernel, since it'll be the last one
         # computed
