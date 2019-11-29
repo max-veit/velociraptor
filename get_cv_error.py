@@ -94,6 +94,10 @@ parser.add_argument(
     '-opt', '--optimize-all', action='store_true', help="Optimize the CV-error"
             " w.r.t all of the numerical, non-integer kernel parameters?")
 parser.add_argument(
+    '-kis', '--kparams-init-simplex', help="File containing the initial "
+            "simplex for the Nelder-Mead optimization of kernel parameters "
+            "(should be a 4x3 matrix, in NumPy or text format).")
+parser.add_argument(
     '-nt', '--num-training-geometries', type=int, nargs='*', metavar='<n>',
             help="Keep only the first <n> geometries for training.  "
             "Specify multiple values to do a learning curve.")
@@ -121,11 +125,23 @@ def make_cv_sets(n_geoms, cv_num_partitions):
     return [np.sort(idces_set) for idces_set in idces_split]
 
 
+def load_detect_matrix(filename):
+    fext = os.path.splitext(filename)[1]
+    if (fext == '.npy') or (fext == '.npz'):
+        matrix = np.load(filename)
+    elif (fext == '.txt') or (fext == '.dat'):
+        matrix = np.loadtxt(filename)
+    else:
+        logger.warning("Matrix file {:s} has unrecognized or missing filename "
+                       "extension; assuming plain text.".format(filename))
+        matrix = np.loadtxt(filename)
+
+
 def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                     scalar_weight, tensor_weight,
                     optimize_kparams, optimize_dreg, optimize_creg,
                     geometries, dipoles, workdir, cv_idces_sets,
-                    dipole_normalize=True):
+                    dipole_normalize=True, init_simplex_file=None):
 
     if cv_idces_sets is None:
         LOGGER.error("Requested optimization with no cross-validation. "
@@ -197,9 +213,13 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         initial_params = np.array((kparams_initial['atom_width'],
                                    kparams_initial['rad_r0'],
                                    kparams_initial['rad_m']))
-        opt_result = optimize.minimize(objective, initial_params,
-                                       method='Nelder-Mead', options=dict(
-                                           maxiter=100, xatol=1e-2))
+        optimizer_options = dict(maxiter=100, xatol=1e-2)
+        if init_simplex_file is not None:
+            opt_result['initial_simplex'] = load_detect_matrix(
+                                                            init_simplex_file)
+        opt_result = optimize.minimize(
+                objective, initial_params, method='Nelder-Mead',
+                options=optimizer_options)
         print(opt_result)
         final_params = opt_result.x
         final_reg = np.array([dipole_reg_last, charge_reg_last])
@@ -242,20 +262,11 @@ if __name__ == "__main__":
         geometries = ase.io.read(geom_filename, slice(None))
         n_train = len(geometries)
     charges = get_charges(geometries)
-    dipole_fext = os.path.splitext(args.dipoles)[1]
     if not os.path.dirname(args.dipoles):
         dipole_filename = os.path.join(args.working_directory, args.dipoles)
     else:
         dipole_filename = args.dipoles
-    del args.dipoles
-    if dipole_fext == '.npy':
-        dipoles = np.load(dipole_filename)[:n_train]
-    elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
-        dipoles = np.loadtxt(dipole_filename)[:n_train]
-    else:
-        logger.warning("Dipoles file has no filename extension; assuming "
-                       "plain text.")
-        dipoles = np.loadtxt(dipole_filename)[:n_train]
+    dipoles = load_detect_matrix(dipole_filename)[:n_train]
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     dipole_normalize = True # seems to be the best option
     if args.cv_file is not None:
@@ -292,8 +303,8 @@ if __name__ == "__main__":
                 args.scalar_weight, args.tensor_weight,
                 args.optimize_all, args.optimize_dipole_reg,
                 args.optimize_charge_reg,
+                dipole_normalize, args.kparams_init_simplex)
                 geometries, dipoles, args.working_directory, cv_idces_sets,
-                dipole_normalize)
         kparams_final, final_reg = opt_results
         # probably don't need to recompute kernel, since it'll be the last one
         # computed
