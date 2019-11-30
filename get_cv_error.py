@@ -216,7 +216,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                                    kparams_initial['rad_m']))
         optimizer_options = dict(maxiter=100, xatol=1e-2)
         if init_simplex_file is not None:
-            opt_result['initial_simplex'] = load_detect_matrix(
+            optimizer_options['initial_simplex'] = load_detect_matrix(
                                                             init_simplex_file)
         opt_result = optimize.minimize(
                 objective, initial_params, method='Nelder-Mead',
