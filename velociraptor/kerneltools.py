@@ -39,23 +39,28 @@ def compute_power_spectra(
     rad_c = 1
     r_cut = 5.0
     if not os.path.dirname(atoms_file):
+        atoms_file_rel = atoms_file
         atoms_file = os.path.join(workdir, atoms_file)
+    else:
+        atoms_file_rel = os.path.relpath(atoms_file, workdir)
     # This assumes SOAPFAST/bin is in PATH
     # Aaaand it needs SOAPFAST/scripts too.
     ps_args = ([
         'sagpr_parallel_get_PS',
-        '-f', atoms_file, '-nrun', str(NCPUS),
+        '-f', atoms_file_rel, '-nrun', str(NCPUS),
         '-lm', str(lambda_), '-nc', str(n_sparse_components),
         '-n', str(n_max), '-l', str(l_max), '-rc', str(r_cut),
         '-sg', str(atom_width),
         '-c',] + species_list + ['-s',] + species_list + [
         '-rs', str(rad_c), str(rad_r0), str(rad_m),
-        '-o', os.path.join(workdir, ps_prefix)
+        '-o', ps_prefix
     ])
     if feat_sparsefile is not None:
-        ps_args.extend(['-sf', os.path.join(workdir, feat_sparsefile)])
+        ps_args.extend(['-sf', feat_sparsefile])
     LOGGER.info("Running: " + ' '.join(ps_args))
-    subprocess.run(ps_args, env=PY2_ENV, check=True)
+    # This must be run in workdir because it creates tempfiles in its
+    # current working directory
+    subprocess.run(ps_args, env=PY2_ENV, cwd=workdir, check=True)
 
     # ATOMIC POWER spectra!
     atomic_ps_args = [
