@@ -142,7 +142,8 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
                     scalar_weight, tensor_weight,
                     optimize_kparams, optimize_dreg, optimize_creg,
                     geometries, dipoles, workdir, cv_idces_sets,
-                    dipole_normalize=True, init_simplex_file=None):
+                    dipole_normalize=True, init_simplex_file=None,
+                    penalize_small_atomwidth=True):
 
     if cv_idces_sets is None:
         LOGGER.error("Requested optimization with no cross-validation. "
@@ -195,6 +196,8 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         def objective(test_params):
             LOGGER.info("Trying params: " + str(test_params))
             (atom_width, rad_r0, rad_m) = test_params
+            if penalize_small_atomwidth and (atom_width < 0.2):
+                return 10000 # hackish, but it should work
             kparams = dict(kparams_initial)
             kparams['atom_width'] = atom_width
             kparams['rad_r0'] = rad_r0
