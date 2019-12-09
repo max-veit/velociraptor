@@ -234,14 +234,14 @@ def recompute_vector_kernels(
                           zeta=zeta, workdir=workdir)
     # full-sparse
     compute_vector_kernel(
-            'PS1_train.npy', 'PS0v_train.npy',
+            'PS1_train_sparse.npy', 'PS0v_train_sparse.npy',
             'PS1_train_atomic_sparse.npy', 'PS0v_train_atomic_sparse.npy',
             'PS1_train_natoms.npy',
             zeta=zeta, kernel_name='K1_NM', workdir=workdir)
     # test-train(sparse)
     if atoms_filename_test is not None:
         compute_vector_kernel(
-                'PS1_test.npy', 'PS0v_test.npy',
+                'PS1_test_sparse.npy', 'PS0v_test_sparse.npy',
                 'PS1_train_atomic_sparse.npy', 'PS0v_train_atomic_sparse.npy',
                 'PS1_test_natoms.npy',
                 zeta=zeta, kernel_name='K1_TM', workdir=workdir)
