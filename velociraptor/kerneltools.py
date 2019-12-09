@@ -65,7 +65,7 @@ def compute_power_spectra(
     # ATOMIC POWER spectra!
     atomic_ps_args = [
         'get_atomic_power_spectrum.py',
-        '-p', os.path.join(workdir, ps_prefix + '.npy'),
+        '-p', os.path.join(workdir, ps_prefix '_sparse' + '.npy'),
         '-f', atoms_file,
         '-o', os.path.join(workdir, ps_prefix + '_atomic')
     ]
@@ -244,7 +244,7 @@ def recompute_vector_kernels(
                 'PS1_test.npy', 'PS0v_test.npy',
                 'PS1_train_atomic_sparse.npy', 'PS0v_train_atomic_sparse.npy',
                 'PS1_test_natoms.npy',
-                zeta=zeta, kernel_name='K1_MT', workdir=workdir)
+                zeta=zeta, kernel_name='K1_TM', workdir=workdir)
 
 
 #TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
