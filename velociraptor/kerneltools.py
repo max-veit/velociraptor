@@ -65,7 +65,7 @@ def compute_power_spectra(
     # ATOMIC POWER spectra!
     atomic_ps_args = [
         'get_atomic_power_spectrum.py',
-        '-p', os.path.join(workdir, ps_prefix '_sparse' + '.npy'),
+        '-p', os.path.join(workdir, ps_prefix + '_sparse' + '.npy'),
         '-f', atoms_file,
         '-o', os.path.join(workdir, ps_prefix + '_atomic')
     ]
