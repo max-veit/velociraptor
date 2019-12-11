@@ -296,7 +296,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         kparams_initial['rad_m'] = final_params[2]
     elif optimize_weights:
         final_weights, fval = optimize_scalar_vector_weights(scalar_weight,
-                                                             vector_weight)
+                                                             tensor_weight)
         final_rel_weights = final_weights[:2]
         final_reg = np.array([dipole_reg_initial, charge_reg_initial])
         if optimize_creg:
