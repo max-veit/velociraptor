@@ -104,6 +104,10 @@ parser.add_argument(
             "simplex for the Nelder-Mead optimization of kernel parameters "
             "(should be a 4x3 matrix, in NumPy or text format).")
 parser.add_argument(
+    '-kr', '--kernel-recompute', action='store_true', help="Recompute the "
+            "kernel, even if it is not required by an optimization (i.e. if "
+            "kernel hypers are not being optimized)")
+parser.add_argument(
     '-nt', '--num-training-geometries', type=int, nargs='*', metavar='<n>',
             help="Keep only the first <n> geometries for training.  "
             "Specify multiple values to do a learning curve.")
@@ -167,8 +171,8 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
     if optimize_weights:
         if optimize_kparams:
             LOGGER.error("Optimizing scalar/tensor weights together with the "
-                         "kernel params is not implemented and, furthermore, "
-                         "not recommended. ")
+                         "kernel hypers is not implemented and certainly not "
+                         "recommended. ")
             sys.exit(1)
         if optimize_dreg:
             LOGGER.warning("Dipole regularizer should not be optimized "
@@ -217,7 +221,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         def objective_no_recompute(weights_log):
             scalar_weight, tensor_weight, charge_reg = 10**weights_log
             return kt_residual(dipole_reg_initial, charge_reg,
-                               10**scalar_weight_log, 10**tensor_weight_log,
+                               scalar_weight, tensor_weight,
                                workdir, geometries, dipoles,
                                dipole_normalize, True, False, None,
                                cv_idces_sets, write_results=False,
@@ -358,7 +362,7 @@ if __name__ == "__main__":
         args.dipole_regularization, args.charge_regularization,
         args.scalar_weight, args.tensor_weight, args.working_directory,
         geometries, dipoles,
-        dipole_normalize, True, True, kparams, cv_idces_sets,
+        dipole_normalize, True, args.recompute_kernels, kparams, cv_idces_sets,
         args.write_residuals) # whew!
     if args.print_residuals:
         print("CV-error: {:.6f} a.u. per atom".format(result))
