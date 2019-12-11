@@ -48,7 +48,7 @@ def compute_power_spectra(
     ps_args = ([
         'sagpr_parallel_get_PS',
         '-f', atoms_file_rel, '-nrun', str(NCPUS),
-        '-lm', str(lambda_), '-nc', str(n_sparse_components),
+        '-lm', str(lambda_),
         '-n', str(n_max), '-l', str(l_max), '-rc', str(r_cut),
         '-sg', str(atom_width),
         '-c',] + species_list + ['-s',] + species_list + [
@@ -57,6 +57,8 @@ def compute_power_spectra(
     ])
     if feat_sparsefile is not None:
         ps_args.extend(['-sf', feat_sparsefile])
+    else:
+        ps_args.extend(['-nc', str(n_sparse_components)])
     LOGGER.info("Running: " + ' '.join(ps_args))
     # This must be run in workdir because it creates tempfiles in its
     # current working directory
