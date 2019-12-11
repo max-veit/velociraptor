@@ -104,7 +104,7 @@ parser.add_argument(
             "simplex for the Nelder-Mead optimization of kernel parameters "
             "(should be a 4x3 matrix, in NumPy or text format).")
 parser.add_argument(
-    '-kr', '--kernel-recompute', action='store_true', help="Recompute the "
+    '-kr', '--recompute-kernels', action='store_true', help="Recompute the "
             "kernel, even if it is not required by an optimization (i.e. if "
             "kernel hypers are not being optimized)")
 parser.add_argument(
