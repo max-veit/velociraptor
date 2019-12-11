@@ -363,7 +363,7 @@ if __name__ == "__main__":
     if args.print_residuals:
         print("CV-error: {:.6f} a.u. per atom".format(result))
     if (args.optimize_charge_reg or args.optimize_dipole_reg
-            or args. args.optimize_kparams or args.optimize_weights):
+            or args.optimize_kparams or args.optimize_weights):
         opt_results = optimize_hypers(
                 kparams, args.dipole_regularization,
                 args.charge_regularization,
