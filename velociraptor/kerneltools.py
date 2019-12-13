@@ -57,8 +57,11 @@ def compute_power_spectra(
     ])
     if feat_sparsefile is not None:
         ps_args.extend(['-sf', feat_sparsefile])
+        ps_sparse_prefix = ps_prefix
     else:
         ps_args.extend(['-nc', str(n_sparse_components)])
+        # The "sparse" suffix is only appended if creating a new feature FPS
+        ps_sparse_prefix = ps_prefix + '_sparse'
     LOGGER.info("Running: " + ' '.join(ps_args))
     # This must be run in workdir because it creates tempfiles in its
     # current working directory
