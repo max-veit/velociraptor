@@ -176,7 +176,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                     instead of the RMS of the norm of the dipole moments
                     in 'dipole_test'
         dipole_normalized
-                    Are the input dipoles than normalized by the number of
+                    Are the input dipoles normalized by the number of
                     atoms in each molecule? (default True)
 
     Return value is a dictionary of numpy arrays.  Depending on what

@@ -84,6 +84,38 @@ def transform_envts_charge_dipoles(molecules, target_matrix,
     return target_transformed
 
 
+def transform_envts_partial_charges(molecules, target_matrix,
+        transpose_kernel=False):
+    """Transform a matrix of environments to atomic partial charges
+
+    Parameters:
+        molecules       A list of ASE Atoms objects containing the
+                        atomic positions for each configuration
+        target_matrix   The matrix to transform; rows should correspond
+                        to environments (atoms).  The column dimension
+                        is retained in the output (left-multiplication).
+    Optional parameters:
+        transpose_kernel
+                        Whether the kernel was computed in the opposite
+                        order, sparse:full (MN) instead of the expected
+                        full:sparse (NM) -- in this case, meaning the
+                        environments are along the columns rather than
+                        the rows.
+    """
+    if transpose_kernel:
+        target_transformed = target_matrix.transpose()
+    else:
+        target_transformed = target_matrix
+    if target_transformed.shape[0] != sum(mol.get_number_of_atoms()
+                                          for mol in molecules):
+        raise ValueError("Target matrix must have as many rows (columns, if "
+                         "transposed) as environments (i.e. atoms) in the "
+                         "list of molecules")
+    # Welp, that was easy (the scalar kernel matrix is already in terms of
+    # partial charges)
+    return target_transformed
+
+
 def transform_spherical_tensor_to_cartesian(target_matrix):
     """Transform a matrix from spherical-tensor to Cartesian ordering"""
     target_shape = target_matrix.shape
@@ -170,6 +202,59 @@ def transform_vector_envts_charge_dipoles(
                 molecule_target_summed.transpose(2, 0, 1).reshape(3, -1))
         environ_idx += natoms_mol
     return target_transformed
+
+
+def transform_vector_envts_atomic_dipoles(
+        molecules, target_matrix, transpose_kernel=False, spherical=False):
+    """Transform a matrix of vector molecular kernels to atomic dipoles
+
+    This takes a matrix of shape (n_envs, n_sparse, 3, 3), describing
+    the vector components of the kernels between individual atoms, to
+    another matrix of shape (n_envs*3, n_sparse*3) describing the
+    kernel of the Cartesian vector components of the atomic dipoles with
+    the components of the sparse environments.
+
+    Parameters:
+        molecules       A list of ASE Atoms objects containing the
+                        atomic positions for each configuration
+        target_matrix   The matrix to transform; rows should correspond
+                        to environments (atoms).  The column dimension
+                        is retained in the output (left-multiplication).
+    Optional parameters:
+        transpose_kernel
+                        Whether the kernel was computed in the opposite
+                        order, sparse:full (MN) instead of the expected
+                        full:sparse (NM)
+        spherical       Whether the kernel matrix was stored in "spherical
+                        tensor" order (i.e. in order of the spherical l=1
+                        components, rather than the Cartesian components)
+                        Setting this option to True will transform it to
+                        the standard Cartesian basis used by the rest of
+                        velociraptor
+    """
+    target_shape = target_matrix.shape
+    if target_shape[2:] != (3, 3):
+        raise ValueError('Vector kernel has unrecognized shape: {}'.format(
+                target_shape))
+    if not transpose_kernel:
+        target_n_envs = target_matrix.shape[0]
+        target_shape_new = (target_n_envs * 3, target_shape[1] * 3)
+    else:
+        target_n_envs = target_matrix.shape[1]
+        target_shape_new = (target_n_envs * 3, target_shape[0] * 3)
+    if target_n_envs != sum(mol.get_number_of_atoms()
+                            for mol in molecules):
+        raise ValueError("Target matrix must have as many rows (columns, if "
+                         "transposed) as environments (i.e. atoms) in the "
+                         "list of molecules")
+    if spherical:
+        target_matrix = target_matrix[:, :, [2, 0, 1]][:, :, :, [2, 0, 1]]
+    target_new = target_matrix.transpose((0, 2, 1, 3))
+    if not transpose_kernel:
+        target_new = target_new.reshape(target_shape_new)
+    else:
+        target_new = target_new.reshape(target_shape_new[::-1]).transpose()
+    return target_new
 
 
 def transform_vector_mols_charge_dipoles(
