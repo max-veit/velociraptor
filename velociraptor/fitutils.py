@@ -204,12 +204,13 @@ def compute_per_atom_properties(
     if tensor_weight == 0:
         per_atom_properties['charges'] = scalar_kernel_transformed.dot(weights)
     elif scalar_weight == 0:
-        per_atom_properties['dipoles'] = tensor_kernel_transformed.dot(weights)
+        per_atom_properties['dipoles'] = tensor_kernel_transformed.dot(
+                weights).reshape((-1, 3))
     else:
         per_atom_properties['charges'] = scalar_kernel_transformed.dot(
                 weights[:n_sparse])
         per_atom_properties['dipoles'] = tensor_kernel_transformed.dot(
-                weights[n_sparse:])
+                weights[n_sparse:]).reshape((-1, 3))
     if write_properties is not None:
         np.savez(write_properties, **per_atom_properties)
     if write_properties_geoms is not None:
