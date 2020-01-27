@@ -2,6 +2,8 @@
 
 
 import logging
+
+import ase.io
 import numpy as np
 
 from . import solvers
@@ -193,7 +195,7 @@ def compute_per_atom_properties(
     if scalar_weight != 0:
         scalar_kernel_transformed = transform_envts_partial_charges(
                 geometries, scalar_kernel, transpose_kernels) * scalar_weight
-        n_scalar_envs = scalar_kernel_transformed.shape[0]
+        n_sparse = scalar_kernel_transformed.shape[1]
     if tensor_weight != 0:
         tensor_kernel_transformed = transform_vector_envts_atomic_dipoles(
                 geometries, tensor_kernel,
@@ -205,9 +207,9 @@ def compute_per_atom_properties(
         per_atom_properties['dipoles'] = tensor_kernel_transformed.dot(weights)
     else:
         per_atom_properties['charges'] = scalar_kernel_transformed.dot(
-                weights[:n_scalar_envs])
+                weights[:n_sparse])
         per_atom_properties['dipoles'] = tensor_kernel_transformed.dot(
-                weights[n_scalar_envs:])
+                weights[n_sparse:])
     if write_properties is not None:
         np.savez(write_properties, **per_atom_properties)
     if write_properties_geoms is not None:
@@ -217,4 +219,5 @@ def compute_per_atom_properties(
             for key, prop in per_atom_properties.items():
                 geom.arrays[key] = prop[atom_index : atom_index + n_atoms]
             atom_index += n_atoms
+        ase.io.write(write_properties_geoms, geometries)
 
