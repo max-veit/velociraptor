@@ -110,11 +110,6 @@ parser.add_argument(
             "opposite order (MN) from the one expected (NM) (where N is full "
             "and M is sparse)")
 parser.add_argument(
-    '-tvk', '--transpose-vector-kernels', action='store_true', help="Same as "
-            "-tk, but only for the (full) vector kernels.  This is a "
-            "transitional option to patch up different conventions; don't "
-            "expect it to stick around.")
-parser.add_argument(
     '-tm', '--tensor-kernel-molecular', action='store_true', help="Is the full"
             " tensor kernel stored in molecular, rather than atomic, format? "
             "(i.e. are they pre-summed over the atoms in a molecule?) "
@@ -174,16 +169,17 @@ if __name__ == "__main__":
     n_descriptors = sum(natoms_list)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
      tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
-    scalar_kernel_full_sparse = scalar_kernel_full_sparse[:n_descriptors]
     #TODO move some of this logic into the transform functions?
     if args.tensor_kernel_molecular:
         n_vector = n_train
     else:
         n_vector = n_descriptors
-    if not (args.transpose_full_kernels or args.transpose_vector_kernels):
+    if not args.transpose_full_kernels:
         tensor_kernel_full_sparse = tensor_kernel_full_sparse[:n_vector]
+        scalar_kernel_full_sparse = scalar_kernel_full_sparse[:n_descriptors]
     else:
-        tensor_kernel_full_sparse = tensor_kernel_full_sparse[:, :n_vector]
+        tensor_kernel_full_sparse = tensor_kernel_full_sparse[:,:n_vector]
+        scalar_kernel_full_sparse = scalar_kernel_full_sparse[:,:n_descriptors]
     scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
         geometries, scalar_kernel_sparse, args.scalar_weight,
                     tensor_kernel_sparse, args.tensor_weight, args.spherical)
@@ -191,7 +187,6 @@ if __name__ == "__main__":
         geometries, scalar_kernel_full_sparse, args.scalar_weight,
         tensor_kernel_full_sparse, args.tensor_weight,
         args.tensor_kernel_molecular, args.transpose_full_kernels,
-        (args.transpose_full_kernels or args.transpose_vector_kernels),
         args.dipole_normalize, args.spherical)
     # Close files or free memory for what comes next
     del scalar_kernel_full_sparse

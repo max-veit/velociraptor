@@ -24,12 +24,11 @@ def get_charges(geometries):
 def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
                       vector_kernel_full_sparse, vector_weight,
                       vector_kernel_molecular=False,
-                      transpose_scalar_kernel=False,
-                      transpose_vector_kernel=False,
+                      transpose_full_kernels=False,
                       dipole_normalize=True, spherical=False):
     if scalar_weight != 0:
         scalar_kernel_transformed = transform_envts_charge_dipoles(
-                geometries, scalar_kernel_full_sparse, transpose_scalar_kernel,
+                geometries, scalar_kernel_full_sparse, transpose_full_kernels,
                 dipole_normalize)
         scalar_kernel_transformed *= scalar_weight
     else:
@@ -39,12 +38,12 @@ def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
         if vector_kernel_molecular:
             vector_kernel_transformed = transform_vector_mols_charge_dipoles(
                         geometries, vector_kernel_full_sparse,
-                        transpose_vector_kernel, (not dipole_normalize),
+                        transpose_full_kernels, (not dipole_normalize),
                         spherical)
         else:
             vector_kernel_transformed = transform_vector_envts_charge_dipoles(
                         geometries, vector_kernel_full_sparse,
-                        transpose_vector_kernel, dipole_normalize, spherical)
+                        transpose_full_kernels, dipole_normalize, spherical)
         vector_kernel_transformed *= vector_weight
     else:
         vector_kernel_transformed = vector_kernel_full_sparse

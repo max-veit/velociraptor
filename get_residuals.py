@@ -110,7 +110,6 @@ if __name__ == "__main__":
             geometries, scalar_kernel, args.scalar_weight,
             tensor_kernel, args.tensor_weight, args.tensor_kernel_molecular,
             args.transpose_full_kernels,
-            (args.transpose_full_kernels or args.transpose_vector_kernels),
             args.dipole_normalized, args.spherical)
     charges = get_charges(geometries)
     dipole_fext = os.path.splitext(args.dipoles)[1]

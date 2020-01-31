@@ -11,9 +11,7 @@ import ase.io
 import numpy as np
 from scipy import optimize
 
-from velociraptor.fitutils import (transform_kernels, transform_sparse_kernels,
-                                   compute_weights, compute_residuals,
-                                   get_charges)
+from velociraptor.fitutils import get_charges
 from velociraptor.kerneltools import make_kernel_params
 from velociraptor.kerneltools import compute_residual as kt_residual
 
