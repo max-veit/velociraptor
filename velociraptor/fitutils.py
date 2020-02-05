@@ -169,7 +169,7 @@ def compute_residuals(
                            np.array([scalar_kernel_transformed.shape[1]]))
     residuals = solvers.compute_residuals(
         weights, kernels, dipoles, natoms_list,
-        charges_test=charges_test, return_rmse=True,
+        charges_test=charges_test, return_rmse=True, return_norm_mae=True,
         intrinsic_dipole_std=intrinsic_variation,
         dipole_normalized=dipole_normalized)
     if print_residuals:

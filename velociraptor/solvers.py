@@ -138,7 +138,8 @@ def compute_per_atom_vector(geometries, weights, kernel_matrix):
 
 def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                       charges_test=None, return_rmse=True,
-                      intrinsic_dipole_std=None, dipole_normalized=True):
+                      return_norm_mae=True, intrinsic_dipole_std=None,
+                      dipole_normalized=True):
     """Compute the residuals for the given fit
 
     If the RMSE is requested, return the RMS of the _norm_ of the dipole
@@ -170,14 +171,14 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         return_rmse Whether to return the RMS errors to summarize the
                     residuals, including as fractions of the intrinsic
                     errors (standard deviations per atom) of the dipoles
-                    and charges.
+                    and charges; these are always per-atom.
+        return_norm_mae
+                    Whether to return the MAE of the _norms_ of the total
+                    molecular dipole predictions
         intrinsic_dipole_std
                     Intrinsic variation of the dipole moments to use,
                     instead of the RMS of the norm of the dipole moments
                     in 'dipole_test'
-        dipole_normalized
-                    Are the input dipoles normalized by the number of
-                    atoms in each molecule? (default True)
 
     Return value is a dictionary of numpy arrays.  Depending on what
     is requested, one or more of the following keys will be present:
@@ -208,17 +209,33 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     residuals = predicted - data_test
     residuals_out = dict()
     if charges_included:
+        charges_predicted, dipoles_predicted = split_charges_dipoles(predicted)
+        charges_test, dipoles_test = split_charges_dipoles(data_test)
         charge_residuals, dipole_residuals = split_charges_dipoles(residuals)
         residuals_out['charge_residuals'] = charge_residuals
     else:
+        dipoles_predicted = predicted.reshape(n_test, 3)
+        dipoles_test = data_test.reshape(n_test, 3)
         dipole_residuals = residuals.reshape(n_test, 3)
     # DANGER WILL ROBINSON: These residuals are either per-molecule or
     # normalized per atom, depending on the setting of dipole_normalized
     residuals_out['dipole_residuals'] = dipole_residuals
     if dipole_normalized:
         residuals_out['dipole_scaling'] = natoms_test
+        dipole_norms_predicted = np.sqrt(
+                np.sum((dipoles_predicted.T * natoms_test)**2, axis=0))
+        dipole_norms_test = np.sqrt(
+                np.sum((dipoles_test.T * natoms_test)**2, axis=0))
     else:
         residuals_out['dipole_scaling'] = np.ones(len(natoms_test))
+        dipole_norms_predicted = np.sqrt(
+                np.sum(dipoles_predicted.T**2, axis=0))
+        dipole_norms_test = np.sqrt(np.sum(dipoles_test.T**2, axis=0))
+    residuals_out['dipole_norms_predicted'] = dipole_norms_predicted
+    residuals_out['dipole_norms_test'] = dipole_norms_test
+    # Also note that the dipole moment norms are _not_ affected by the scaling;
+    # they're always the norm of the dipole moment of the whole molecule (it
+    # doesn't really make sense to scale this by the number of atoms, I think)
     if return_rmse:
         if dipole_normalized:
             dipole_rmse = np.sqrt(np.sum(dipole_residuals**2) / n_test)
@@ -234,17 +251,20 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
             else:
                 intrinsic_dipole_std = np.sqrt(
                         np.sum((dipoles_test.T / natoms_test)**2) / n_test)
+        residuals_out['intrinsic_dipole_rmse'] = intrinsic_dipole_std
         residuals_out['dipole_frac'] = dipole_rmse / intrinsic_dipole_std
         if charges_included:
             charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
                                   / n_test)
             residuals_out['charge_rmse'] = charge_rmse
-            #TODO(max) same question
             charge_std = np.std(charges_test / natoms_test)
             if charge_std == 0.:
                 residuals_out['charge_frac'] = np.nan
             else:
                 residuals_out['charge_frac'] = charge_rmse / charge_std
+    if return_norm_mae:
+        residuals_out['dipole_norm_mae'] = np.mean(
+                np.abs(dipole_norms_predicted - dipole_norms_test))
     return residuals_out
 
 
