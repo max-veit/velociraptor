@@ -434,6 +434,9 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
          tensor_kernel_molecular) = infer_kernel_convention(
                 tensor_kernel_full_sparse.shape, len(geoms),
                 sum(geom.get_number_of_atoms() for geom in geoms))
+        if tensor_kernel_transposed:
+            raise ValueError("Transposed vector kernels are no longer "
+                             "supported (re-generating is best)")
     else:
         tensor_kernel_transposed = False
         tensor_kernel_molecular = False
@@ -441,8 +444,7 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
             geoms, scalar_kernel_full_sparse, weight_scalar,
             tensor_kernel_full_sparse, weight_tensor,
             vector_kernel_molecular=tensor_kernel_molecular,
-            transpose_scalar_kernel=False,
-            transpose_vector_kernel=tensor_kernel_transposed,
+            transpose_full_kernels=False,
             dipole_normalize=dipole_normalize, spherical=spherical)
     del scalar_kernel_full_sparse
     del tensor_kernel_full_sparse
