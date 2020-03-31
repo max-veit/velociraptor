@@ -1,4 +1,4 @@
-"""Some utilities useful for the fitting step of dipole learning"""
+"""Low-level utilities for fitting and computing residuals"""
 
 import logging
 import numpy as np
@@ -179,6 +179,9 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                     Intrinsic variation of the dipole moments to use,
                     instead of the RMS of the norm of the dipole moments
                     in 'dipole_test'
+        dipole_normalized
+                    Whether the test (and model!) dipoles (and charges,
+                    if applicable) are normalized by the number of atoms
 
     Return value is a dictionary of numpy arrays.  Depending on what
     is requested, one or more of the following keys will be present:
@@ -254,10 +257,14 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         residuals_out['intrinsic_dipole_rmse'] = intrinsic_dipole_std
         residuals_out['dipole_frac'] = dipole_rmse / intrinsic_dipole_std
         if charges_included:
-            charge_rmse = np.sqrt(np.sum((charge_residuals / natoms_test)**2)
-                                  / n_test)
+            if dipole_normalized:
+                charge_rmse = np.sqrt(np.sum(charge_residuals**2) / n_test)
+                charge_std = np.std(charges_test)
+            else:
+                charge_rmse = np.sqrt(np.sum(
+                    (charge_residuals / natoms_test)**2) / n_test)
+                charge_std = np.std(charges_test / natoms_test)
             residuals_out['charge_rmse'] = charge_rmse
-            charge_std = np.std(charges_test / natoms_test)
             if charge_std == 0.:
                 residuals_out['charge_frac'] = np.nan
             else:

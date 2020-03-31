@@ -123,6 +123,7 @@ if __name__ == "__main__":
         dipoles = np.loadtxt(args.dipoles)
     if args.dipole_normalized:
         dipoles = (dipoles.T / natoms_list).T
+        charges = charges / natoms_list
     weights = np.load(args.weights)
     del args.dipoles
     del args.weights

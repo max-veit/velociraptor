@@ -519,9 +519,10 @@ def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
     dipoles_test = np.load(os.path.join(workdir, 'dipoles_test.npy'))
     geoms_test = ase.io.read(os.path.join(workdir, 'qm7_test.xyz'), ':')
     natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
+    charges_test = get_charges(geoms_test)
     if dipole_normalize:
         dipoles_test = dipoles_test / natoms_test[:, np.newaxis]
-    charges_test = get_charges(geoms_test)
+        charges_test = charges_test / natoms_test
     (scalar_kernel_test_transformed,
      tensor_kernel_test_transformed) = load_transform_kernels(
          workdir, geoms_test, weight_scalar, weight_tensor, load_sparse=False,

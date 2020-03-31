@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser(
     epilog="Charges are assumed to sum to zero for each geometry, unless "
     "the geometries have a property (info entry, in ASE terminology) named "
     "'total_charge'.\n\n"
-    "Setting either of the (scalar or tensor) weights to zero will turn "
+    "Setting either of the (scalar or vector) weights to zero will turn "
     "off that component completely and the corresponding kernel file(s) "
     "will not be read.")
 parser.add_argument(
@@ -37,10 +37,10 @@ parser.add_argument(
     'scalar_kernel', help="Filename for the full-sparse (NM) scalar kernel, "
             "in atomic environment space")
 parser.add_argument(
-    'tensor_kernel_sparse', help="Filename for the sparse-sparse "
-            "tensor kernel")
+    'vector_kernel_sparse', help="Filename for the sparse-sparse "
+            "vector kernel")
 parser.add_argument(
-    'tensor_kernel', help="Filename for the full-sparse tensor kernel, "
+    'vector_kernel', help="Filename for the full-sparse vector kernel, "
             "mapping Cartesian components to environments")
 parser.add_argument(
     'weights_output', help="Name of a file into which to write the "
@@ -50,8 +50,8 @@ parser.add_argument(
             help="Weight of the scalar component (charges) in the model",
             required=True)
 parser.add_argument(
-    '-wt', '--tensor-weight', type=float, metavar='weight',
-            help="Weight of the tensor component (point dipoles) in the model",
+    '-wt', '--vector-weight', type=float, metavar='weight',
+            help="Weight of the vector component (point dipoles) in the model",
             required=True)
 parser.add_argument(
     '-rc', '--charge-regularization', type=float, default=1.0,
@@ -110,8 +110,8 @@ parser.add_argument(
             "opposite order (MN) from the one expected (NM) (where N is full "
             "and M is sparse)")
 parser.add_argument(
-    '-tm', '--tensor-kernel-molecular', action='store_true', help="Is the full"
-            " tensor kernel stored in molecular, rather than atomic, format? "
+    '-tm', '--vector-kernel-molecular', action='store_true', help="Is the full"
+            " vector kernel stored in molecular, rather than atomic, format? "
             "(i.e. are they pre-summed over the atoms in a molecule?) "
             "Note this option is compatible with -tk and -tvk.")
 parser.add_argument(
@@ -132,16 +132,16 @@ def load_kernels(args):
     else:
         scalar_kernel = np.array([])
         scalar_kernel_sparse = np.array([])
-    if args.tensor_weight != 0:
-        tensor_kernel_sparse = np.load(args.tensor_kernel_sparse)
-        tensor_kernel = np.load(args.tensor_kernel, mmap_mode=mmap_mode)
+    if args.vector_weight != 0:
+        vector_kernel_sparse = np.load(args.vector_kernel_sparse)
+        vector_kernel = np.load(args.vector_kernel, mmap_mode=mmap_mode)
     else:
-        tensor_kernel = np.array([])
-        tensor_kernel_sparse = np.array([])
+        vector_kernel = np.array([])
+        vector_kernel_sparse = np.array([])
     del args.scalar_kernel_sparse
-    del args.tensor_kernel_sparse
+    del args.vector_kernel_sparse
     return (scalar_kernel_sparse, scalar_kernel,
-            tensor_kernel_sparse, tensor_kernel)
+            vector_kernel_sparse, vector_kernel)
 
 
 if __name__ == "__main__":
@@ -166,42 +166,43 @@ if __name__ == "__main__":
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
     if args.dipole_normalize:
         dipoles = (dipoles.T / natoms_list).T
+        charges = charges / natoms_list
     n_descriptors = sum(natoms_list)
     (scalar_kernel_sparse, scalar_kernel_full_sparse,
-     tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(args)
+     vector_kernel_sparse, vector_kernel_full_sparse) = load_kernels(args)
     #TODO move some of this logic into the transform functions?
-    if args.tensor_kernel_molecular:
+    if args.vector_kernel_molecular:
         n_vector = n_train
     else:
         n_vector = n_descriptors
     if not args.transpose_full_kernels:
-        tensor_kernel_full_sparse = tensor_kernel_full_sparse[:n_vector]
+        vector_kernel_full_sparse = vector_kernel_full_sparse[:n_vector]
         scalar_kernel_full_sparse = scalar_kernel_full_sparse[:n_descriptors]
     else:
-        tensor_kernel_full_sparse = tensor_kernel_full_sparse[:,:n_vector]
+        vector_kernel_full_sparse = vector_kernel_full_sparse[:,:n_vector]
         scalar_kernel_full_sparse = scalar_kernel_full_sparse[:,:n_descriptors]
-    scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
+    scalar_kernel_sparse, vector_kernel_sparse = transform_sparse_kernels(
         geometries, scalar_kernel_sparse, args.scalar_weight,
-                    tensor_kernel_sparse, args.tensor_weight, args.spherical)
-    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+                    vector_kernel_sparse, args.vector_weight, args.spherical)
+    scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
         geometries, scalar_kernel_full_sparse, args.scalar_weight,
-        tensor_kernel_full_sparse, args.tensor_weight,
-        args.tensor_kernel_molecular, args.transpose_full_kernels,
+        vector_kernel_full_sparse, args.vector_weight,
+        args.vector_kernel_molecular, args.transpose_full_kernels,
         args.dipole_normalize, args.spherical)
     # Close files or free memory for what comes next
     del scalar_kernel_full_sparse
-    del tensor_kernel_full_sparse
+    del vector_kernel_full_sparse
     weights = compute_weights(
         dipoles, charges,
         scalar_kernel_sparse, scalar_kernel_transformed,
-        tensor_kernel_sparse, tensor_kernel_transformed,
+        vector_kernel_sparse, vector_kernel_transformed,
         **vars(args))
     np.save(args.weights_output, weights)
     if args.print_residuals or (args.write_residuals is not None):
         args.dipole_normalized = args.dipole_normalize
         compute_residuals(weights, dipoles, charges, natoms_list,
                           scalar_kernel_transformed,
-                          tensor_kernel_transformed, **vars(args))
+                          vector_kernel_transformed, **vars(args))
     if args.print_weight_norm:
         print("Norm (L2) of weights: {:.4f}".format(np.linalg.norm(weights)))
 
