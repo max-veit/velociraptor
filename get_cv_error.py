@@ -61,8 +61,8 @@ parser.add_argument(
             help="Weight of the scalar component (charges) in the model",
             required=True)
 parser.add_argument(
-    '-wt', '--tensor-weight', type=float, metavar='weight',
-            help="Weight of the tensor component (point dipoles) in the model",
+    '-wt', '--vector-weight', type=float, metavar='weight',
+            help="Weight of the vector component (point dipoles) in the model",
             required=True)
 parser.add_argument(
     '-rc', '--charge-regularization', type=float, default=1.0,
@@ -91,7 +91,7 @@ parser.add_argument(
             "CV-error w.r.t. the dipole regularization?")
 parser.add_argument(
     '-owt', '--optimize-weights', action='store_true', help="Optimize the "
-            "CV-error w.r.t. the scalar and tensor weights?  (Recommended "
+            "CV-error w.r.t. the scalar and vector weights?  (Recommended "
             "use with '-orc', but _not_ '-ord' or '-opt')")
 parser.add_argument(
     '-opt', '--optimize-kparams', action='store_true', help="Optimize the "
@@ -147,7 +147,7 @@ def load_detect_matrix(filename):
 
 
 def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
-                    scalar_weight, tensor_weight,
+                    scalar_weight, vector_weight,
                     optimize_kparams, optimize_dreg, optimize_creg,
                     optimize_weights,
                     geometries, dipoles, workdir, cv_idces_sets,
@@ -158,7 +158,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         LOGGER.error("Requested optimization with no cross-validation. "
                      "This is almost certainly a bad idea.")
     if optimize_kparams:
-        # For tensor-only kernels, the charge regularization is ignored --
+        # For vector-only kernels, the charge regularization is ignored --
         # so don't try to optimize it!
         if scalar_weight == 0:
             optimize_dreg = True
@@ -168,16 +168,16 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
             optimize_creg = True
     if optimize_weights:
         if optimize_kparams:
-            LOGGER.error("Optimizing scalar/tensor weights together with the "
+            LOGGER.error("Optimizing scalar/vector weights together with the "
                          "kernel hypers is not implemented and certainly not "
                          "recommended. ")
             sys.exit(1)
         if optimize_dreg:
             LOGGER.warning("Dipole regularizer should not be optimized "
-                           "together with scalar and tensor weights, as there "
+                           "together with scalar and vector weights, as there "
                            "are only two degrees of freedom between the three "
                            "parameters.  Continuing with only the scalar/"
-                           "tensor weights to be optimized.")
+                           "vector weights to be optimized.")
         optimize_dreg = False
         # Note: Optimizing charge reg also is recommended but not enforced
 
@@ -186,7 +186,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
     def optimize_regularizers(dipole_reg_initial, charge_reg_initial):
         def objective_no_recompute(dipole_reg_log, charge_reg_log):
             return kt_residual(10**dipole_reg_log, 10**charge_reg_log,
-                               scalar_weight, tensor_weight,
+                               scalar_weight, vector_weight,
                                workdir, geometries, dipoles,
                                dipole_normalize, True, False, None,
                                cv_idces_sets, write_results=False,
@@ -217,9 +217,9 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
     def optimize_scalar_vector_weights(scalar_weight_initial,
                                        vector_weight_initial):
         def objective_no_recompute(weights_log):
-            scalar_weight, tensor_weight, charge_reg = 10**weights_log
+            scalar_weight, vector_weight, charge_reg = 10**weights_log
             return kt_residual(dipole_reg_initial, charge_reg,
-                               scalar_weight, tensor_weight,
+                               scalar_weight, vector_weight,
                                workdir, geometries, dipoles,
                                dipole_normalize, True, False, None,
                                cv_idces_sets, write_results=False,
@@ -240,13 +240,13 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         final_weights = 10**opt_result.x
         print(opt_result)
         if optimize_creg:
-            message = "Final {scalar, tensor} weights and charge reg: "
+            message = "Final {scalar, vector} weights and charge reg: "
         else:
-            message = "Final {scalar, tensor} weights: "
+            message = "Final {scalar, vector} weights: "
         print(message + np.array_str(final_weights, precision=6))
         return final_weights, opt_result.fun
 
-    final_rel_weights = np.array([scalar_weight, tensor_weight])
+    final_rel_weights = np.array([scalar_weight, vector_weight])
 
     if optimize_kparams:
         dipole_reg_last = dipole_reg_initial
@@ -264,7 +264,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
             nonlocal charge_reg_last
             resid_first = kt_residual(
                     dipole_reg_last, charge_reg_last, scalar_weight,
-                    tensor_weight, workdir, geometries, dipoles,
+                    vector_weight, workdir, geometries, dipoles,
                     dipole_normalize, True, True, kparams, cv_idces_sets,
                     write_results=False, print_results=False)
             final_reg, result = optimize_regularizers(
@@ -294,7 +294,7 @@ def optimize_hypers(kparams_initial, dipole_reg_initial, charge_reg_initial,
         kparams_initial['rad_m'] = final_params[2]
     elif optimize_weights:
         final_weights, fval = optimize_scalar_vector_weights(scalar_weight,
-                                                             tensor_weight)
+                                                             vector_weight)
         final_rel_weights = final_weights[:2]
         final_reg = np.array([dipole_reg_initial, charge_reg_initial])
         if optimize_creg:
@@ -358,7 +358,7 @@ if __name__ == "__main__":
         None, args.num_sparse_environments, args.num_sparse_features)
     result = kt_residual(
         args.dipole_regularization, args.charge_regularization,
-        args.scalar_weight, args.tensor_weight, args.working_directory,
+        args.scalar_weight, args.vector_weight, args.working_directory,
         geometries, dipoles,
         dipole_normalize, True, args.recompute_kernels, kparams, cv_idces_sets,
         args.write_residuals) # whew!
@@ -369,7 +369,7 @@ if __name__ == "__main__":
         opt_results = optimize_hypers(
                 kparams, args.dipole_regularization,
                 args.charge_regularization,
-                args.scalar_weight, args.tensor_weight,
+                args.scalar_weight, args.vector_weight,
                 args.optimize_kparams, args.optimize_dipole_reg,
                 args.optimize_charge_reg, args.optimize_weights,
                 geometries, dipoles, args.working_directory, cv_idces_sets,

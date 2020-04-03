@@ -35,15 +35,15 @@ parser.add_argument(
     'scalar_kernel', help="Filename for the full-sparse (NM) scalar kernel, "
             "in atomic environment space")
 parser.add_argument(
-    'tensor_kernel', help="Filename for the full-sparse tensor kernel, "
+    'vector_kernel', help="Filename for the full-sparse vector kernel, "
             "mapping Cartesian components to environments")
 parser.add_argument(
     '-ws', '--scalar-weight', type=float, metavar='weight',
             help="Weight of the scalar component (charges) in the model",
             required=True)
 parser.add_argument(
-    '-wt', '--tensor-weight', type=float, metavar='weight',
-            help="Weight of the tensor component (point dipoles) in the model",
+    '-wt', '--vector-weight', type=float, metavar='weight',
+            help="Weight of the vector component (point dipoles) in the model",
             required=True)
 parser.add_argument(
     '-dn', '--dipole-not-normalized',
@@ -74,8 +74,8 @@ parser.add_argument(
             "transitional option to patch up different conventions; don't "
             "expect it to stick around.")
 parser.add_argument(
-    '-tm', '--tensor-kernel-molecular', action='store_true', help="Is the full"
-            " tensor kernel stored in molecular, rather than atomic, format? "
+    '-tm', '--vector-kernel-molecular', action='store_true', help="Is the full"
+            " vector kernel stored in molecular, rather than atomic, format? "
             "(i.e. are they pre-summed over the atoms in a molecule?) "
             "Note this option is compatible with -tk and -tvk.")
 parser.add_argument(
@@ -89,13 +89,13 @@ def load_kernels(args):
         scalar_kernel = np.load(args.scalar_kernel)
     else:
         scalar_kernel = np.array([])
-    if args.tensor_weight != 0:
-        tensor_kernel = np.load(args.tensor_kernel)
+    if args.vector_weight != 0:
+        vector_kernel = np.load(args.vector_kernel)
     else:
-        tensor_kernel = np.array([])
+        vector_kernel = np.array([])
     del args.scalar_kernel
-    del args.tensor_kernel
-    return (scalar_kernel, tensor_kernel)
+    del args.vector_kernel
+    return (scalar_kernel, vector_kernel)
 
 
 if __name__ == "__main__":
@@ -103,12 +103,12 @@ if __name__ == "__main__":
     if (not args.print_residuals) and (args.write_residuals is None):
         raise ValueError("You don't want to print or write residuals, so "
                          "there's nothing for me to do.")
-    scalar_kernel, tensor_kernel = load_kernels(args)
+    scalar_kernel, vector_kernel = load_kernels(args)
     geometries = ase.io.read(args.geometries, ':')
     natoms_list = [geom.get_number_of_atoms() for geom in geometries]
-    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+    scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
             geometries, scalar_kernel, args.scalar_weight,
-            tensor_kernel, args.tensor_weight, args.tensor_kernel_molecular,
+            vector_kernel, args.vector_weight, args.vector_kernel_molecular,
             args.transpose_full_kernels,
             args.dipole_normalized, args.spherical)
     charges = get_charges(geometries)
@@ -130,5 +130,5 @@ if __name__ == "__main__":
     args.charge_mode = 'fit'
     compute_residuals(weights, dipoles, charges, natoms_list,
                       scalar_kernel_transformed,
-                      tensor_kernel_transformed, **vars(args))
+                      vector_kernel_transformed, **vars(args))
 

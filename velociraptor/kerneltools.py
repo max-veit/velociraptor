@@ -255,7 +255,7 @@ def recompute_vector_kernels(
 #TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
 #     just in a different guise with different arguments (which are really just
 #     presets).  Fix?
-def load_kernels(workdir, weight_scalar, weight_tensor, full_name='NM',
+def load_kernels(workdir, weight_scalar, weight_vector, full_name='NM',
                  load_sparse=True, sparse_name='MM', spherical=False):
     if weight_scalar != 0.0:
         if load_sparse:
@@ -266,30 +266,30 @@ def load_kernels(workdir, weight_scalar, weight_tensor, full_name='NM',
     else:
         scalar_kernel_sparse = np.array([])
         scalar_kernel_full_sparse = np.array([])
-    if weight_tensor != 0.0:
+    if weight_vector != 0.0:
         if spherical:
             vector_kernel_name = 'K1_{:s}.npy'
         else:
             vector_kernel_name = 'Kvec_{:s}.npy'
         if load_sparse:
-            tensor_kernel_sparse = np.load(
+            vector_kernel_sparse = np.load(
                     os.path.join(workdir,
                                  vector_kernel_name.format(sparse_name)))
-        tensor_kernel_full_sparse = np.load(
+        vector_kernel_full_sparse = np.load(
                 os.path.join(workdir, vector_kernel_name.format(full_name)))
     else:
-        tensor_kernel_sparse = np.array([])
-        tensor_kernel_full_sparse = np.array([])
+        vector_kernel_sparse = np.array([])
+        vector_kernel_full_sparse = np.array([])
     if load_sparse:
         return (scalar_kernel_sparse, scalar_kernel_full_sparse,
-                tensor_kernel_sparse, tensor_kernel_full_sparse)
+                vector_kernel_sparse, vector_kernel_full_sparse)
     else:
-        return scalar_kernel_full_sparse, tensor_kernel_full_sparse
+        return scalar_kernel_full_sparse, vector_kernel_full_sparse
 
 
 #TODO package the cv-split (or the data and kernels necessary for fitting, more
 #     generally) into some sort of object
-def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
+def do_cv_split(scalar_kernel_transformed, vector_kernel_transformed,
                 geoms, dipoles, charges, idces_test):
     geoms_test = []
     geoms_train = []
@@ -309,21 +309,21 @@ def do_cv_split(scalar_kernel_transformed, tensor_kernel_transformed,
                 idces_charge_dipole_train, :]
     else:
         scalar_kernel_test = scalar_kernel_train = scalar_kernel_transformed
-    if tensor_kernel_transformed.shape != (0,):
-        tensor_kernel_test = tensor_kernel_transformed[
+    if vector_kernel_transformed.shape != (0,):
+        vector_kernel_test = vector_kernel_transformed[
                 idces_charge_dipole_test, :]
-        tensor_kernel_train = tensor_kernel_transformed[
+        vector_kernel_train = vector_kernel_transformed[
                 idces_charge_dipole_train, :]
     else:
-        tensor_kernel_test = tensor_kernel_train = tensor_kernel_transformed
+        vector_kernel_test = vector_kernel_train = vector_kernel_transformed
     dipoles_test = dipoles[idces_test, :]
     dipoles_train = dipoles[idces_train, :]
     charges_test = charges[idces_test]
     charges_train = charges[idces_train]
     return ((dipoles_test, charges_test, geoms_test,
-             scalar_kernel_test, tensor_kernel_test),
+             scalar_kernel_test, vector_kernel_test),
             (dipoles_train, charges_train, geoms_train,
-             scalar_kernel_train, tensor_kernel_train))
+             scalar_kernel_train, vector_kernel_train))
 
 
 def infer_kernel_convention(kernel_shape, n_mol, n_atoms):
@@ -365,7 +365,7 @@ def make_kernel_params(n_max, l_max, atom_width, rad_r0, rad_m,
     return params
 
 
-def compute_residual(dipole_reg, charge_reg, weight_scalar, weight_tensor,
+def compute_residual(dipole_reg, charge_reg, weight_scalar, weight_vector,
                      workdir, geoms_train, dipoles_train,
                      dipole_normalize=True, spherical=False,
                      recompute_kernels=True, kparams=None, cv_idces_sets=None,
@@ -378,127 +378,127 @@ def compute_residual(dipole_reg, charge_reg, weight_scalar, weight_tensor,
             kparams['atoms_filename_test'] = None
         if weight_scalar != 0.0:
             recompute_scalar_kernels(**kparams, workdir=workdir)
-        if weight_tensor != 0.0:
+        if weight_vector != 0.0:
             recompute_vector_kernels(**kparams, workdir=workdir)
     if dipole_normalize:
         natoms_train = [geom.get_number_of_atoms() for geom in geoms_train]
         dipoles_train = (dipoles_train.T / natoms_train).T
     charges_train = get_charges(geoms_train)
     (scalar_kernel_sparse, scalar_kernel_transformed,
-     tensor_kernel_sparse, tensor_kernel_transformed) = load_transform_kernels(
-             workdir, geoms_train, weight_scalar, weight_tensor,
+     vector_kernel_sparse, vector_kernel_transformed) = load_transform_kernels(
+             workdir, geoms_train, weight_scalar, weight_vector,
              load_sparse=True, dipole_normalize=dipole_normalize,
              spherical=spherical)
     if cv_idces_sets is None:
         weights = compute_weights(
                 dipoles_train, charges_train,
                 scalar_kernel_sparse, scalar_kernel_transformed,
-                tensor_kernel_sparse, tensor_kernel_transformed,
-                scalar_weight=weight_scalar, tensor_weight=weight_tensor,
+                vector_kernel_sparse, vector_kernel_transformed,
+                scalar_weight=weight_scalar, vector_weight=weight_vector,
                 charge_mode='fit', dipole_regularization=dipole_reg,
                 charge_regularization=charge_reg, sparse_jitter=0.0)
         return compute_residual_from_weights(
-                weights, weight_scalar, weight_tensor, dipole_normalize,
+                weights, weight_scalar, weight_vector, dipole_normalize,
                 workdir, write_results, print_results)
     else:
         return compute_cv_residual(
                 scalar_kernel_sparse, scalar_kernel_transformed,
-                tensor_kernel_sparse, tensor_kernel_transformed,
+                vector_kernel_sparse, vector_kernel_transformed,
                 geoms_train, dipoles_train, charges_train,
-                dipole_reg, charge_reg, weight_scalar, weight_tensor,
+                dipole_reg, charge_reg, weight_scalar, weight_vector,
                 cv_idces_sets, workdir, dipole_normalize, write_results,
                 print_results)
 
 
 #TODO this is looking more and more like a constructor for a fitting class
 #     that contains all the kernels and data necessary to do a fit
-def load_transform_kernels(workdir, geoms, weight_scalar, weight_tensor,
+def load_transform_kernels(workdir, geoms, weight_scalar, weight_vector,
                            load_sparse=True, full_kernel_name='NM',
                            dipole_normalize=True, spherical=False):
-    if (weight_scalar == 0.0) and (weight_tensor == 0.0):
-        raise ValueError("Can't have both scalar and tensor weights set "
+    if (weight_scalar == 0.0) and (weight_vector == 0.0):
+        raise ValueError("Can't have both scalar and vector weights set "
                          "to zero")
     if load_sparse:
         (scalar_kernel_sparse, scalar_kernel_full_sparse,
-         tensor_kernel_sparse, tensor_kernel_full_sparse) = load_kernels(
-                workdir, weight_scalar, weight_tensor, load_sparse=True,
+         vector_kernel_sparse, vector_kernel_full_sparse) = load_kernels(
+                workdir, weight_scalar, weight_vector, load_sparse=True,
                 full_name=full_kernel_name, spherical=spherical)
     else:
-        scalar_kernel_full_sparse, tensor_kernel_full_sparse = load_kernels(
-                workdir, weight_scalar, weight_tensor, load_sparse=False,
+        scalar_kernel_full_sparse, vector_kernel_full_sparse = load_kernels(
+                workdir, weight_scalar, weight_vector, load_sparse=False,
                 full_name=full_kernel_name, spherical=spherical)
     #TODO if we generate the vector kernel ourselves, we don't have to
     #     infer the convention (though this should work just fine)
-    if weight_tensor != 0.0:
-        (tensor_kernel_transposed,
-         tensor_kernel_molecular) = infer_kernel_convention(
-                tensor_kernel_full_sparse.shape, len(geoms),
+    if weight_vector != 0.0:
+        (vector_kernel_transposed,
+         vector_kernel_molecular) = infer_kernel_convention(
+                vector_kernel_full_sparse.shape, len(geoms),
                 sum(geom.get_number_of_atoms() for geom in geoms))
-        if tensor_kernel_transposed:
+        if vector_kernel_transposed:
             raise ValueError("Transposed vector kernels are no longer "
                              "supported (re-generating is best)")
     else:
-        tensor_kernel_transposed = False
-        tensor_kernel_molecular = False
-    scalar_kernel_transformed, tensor_kernel_transformed = transform_kernels(
+        vector_kernel_transposed = False
+        vector_kernel_molecular = False
+    scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
             geoms, scalar_kernel_full_sparse, weight_scalar,
-            tensor_kernel_full_sparse, weight_tensor,
-            vector_kernel_molecular=tensor_kernel_molecular,
+            vector_kernel_full_sparse, weight_vector,
+            vector_kernel_molecular=vector_kernel_molecular,
             transpose_full_kernels=False,
             dipole_normalize=dipole_normalize, spherical=spherical)
     del scalar_kernel_full_sparse
-    del tensor_kernel_full_sparse
+    del vector_kernel_full_sparse
     if load_sparse:
-        scalar_kernel_sparse, tensor_kernel_sparse = transform_sparse_kernels(
+        scalar_kernel_sparse, vector_kernel_sparse = transform_sparse_kernels(
                 geoms, scalar_kernel_sparse, weight_scalar,
-                tensor_kernel_sparse, weight_tensor, spherical)
+                vector_kernel_sparse, weight_vector, spherical)
         return (scalar_kernel_sparse, scalar_kernel_transformed,
-                tensor_kernel_sparse, tensor_kernel_transformed)
+                vector_kernel_sparse, vector_kernel_transformed)
     else:
-        return scalar_kernel_transformed, tensor_kernel_transformed
+        return scalar_kernel_transformed, vector_kernel_transformed
 
 
 def compute_cv_residual(
         scalar_kernel_sparse, scalar_kernel_transformed,
-        tensor_kernel_sparse, tensor_kernel_transformed,
+        vector_kernel_sparse, vector_kernel_transformed,
         geoms, dipoles, charges, dipole_reg, charge_reg,
-        weight_scalar, weight_tensor,
+        weight_scalar, weight_vector,
         cv_idces_sets, workdir, dipole_normalize=True,
         write_results=True, print_residuals=True):
     """Compute the CV residual by splitting the training data
 
     Uses kernels that have been pre-computed for the whole dataset
     """
-    if (weight_scalar == 0.0) and (weight_tensor == 0.0):
-        raise ValueError("Can't have both scalar and tensor weights set "
+    if (weight_scalar == 0.0) and (weight_vector == 0.0):
+        raise ValueError("Can't have both scalar and vector weights set "
                          "to zero")
     rmse_sum = 0.0
     rmse_sum_sq = 0.0
     for cv_num, cv_idces in enumerate(cv_idces_sets):
         cv_test, cv_train = do_cv_split(scalar_kernel_transformed,
-                                        tensor_kernel_transformed,
+                                        vector_kernel_transformed,
                                         geoms, dipoles, charges, cv_idces)
         (dipoles_train, charges_train, geoms_train,
-         scalar_kernel_train, tensor_kernel_train) = cv_train
+         scalar_kernel_train, vector_kernel_train) = cv_train
         weights = compute_weights(
                 dipoles_train, charges_train, scalar_kernel_sparse,
-                scalar_kernel_train, tensor_kernel_sparse, tensor_kernel_train,
-                scalar_weight=weight_scalar, tensor_weight=weight_tensor,
+                scalar_kernel_train, vector_kernel_sparse, vector_kernel_train,
+                scalar_weight=weight_scalar, vector_weight=weight_vector,
                 charge_mode='fit', dipole_regularization=dipole_reg,
                 charge_regularization=charge_reg, sparse_jitter=0.0)
         if write_results:
             np.save(os.path.join(
                 workdir, 'cv_{:d}_weights.npy'.format(cv_num)), weights)
         (dipoles_test, charges_test, geoms_test,
-         scalar_kernel_test, tensor_kernel_test) = cv_test
+         scalar_kernel_test, vector_kernel_test) = cv_test
         natoms_test = [geom.get_number_of_atoms() for geom in geoms_test]
         write_residuals = (
                 os.path.join(workdir, 'cv_{:d}_residuals.npz'.format(cv_num))
                 if write_results else None)
         resid = compute_residuals(
                 weights, dipoles_test, charges_test, natoms_test,
-                scalar_kernel_test, tensor_kernel_test,
-                weight_scalar, weight_tensor, charge_mode='fit',
+                scalar_kernel_test, vector_kernel_test,
+                weight_scalar, weight_vector, charge_mode='fit',
                 dipole_normalized=dipole_normalize,
                 write_residuals=write_residuals,
                 print_residuals=print_residuals)['dipole_rmse']
@@ -513,7 +513,7 @@ def compute_cv_residual(
     return cv_error
 
 
-def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
+def compute_residual_from_weights(weights, weight_scalar, weight_vector,
                                   dipole_normalize=True, workdir=None,
                                   write_results=True, print_residuals=True):
     dipoles_test = np.load(os.path.join(workdir, 'dipoles_test.npy'))
@@ -524,15 +524,15 @@ def compute_residual_from_weights(weights, weight_scalar, weight_tensor,
         dipoles_test = dipoles_test / natoms_test[:, np.newaxis]
         charges_test = charges_test / natoms_test
     (scalar_kernel_test_transformed,
-     tensor_kernel_test_transformed) = load_transform_kernels(
-         workdir, geoms_test, weight_scalar, weight_tensor, load_sparse=False,
+     vector_kernel_test_transformed) = load_transform_kernels(
+         workdir, geoms_test, weight_scalar, weight_vector, load_sparse=False,
          full_kernel_name='TM', dipole_normalize=dipole_normalize)
     write_residuals = (os.path.join(os.path.join(workdir, 'test_residuals.npz')
                        if write_results else None))
     resids = compute_residuals(
             weights, dipoles_test, charges_test, natoms_test,
-            scalar_kernel_test_transformed, tensor_kernel_test_transformed,
-            scalar_weight=weight_scalar, tensor_weight=weight_tensor,
+            scalar_kernel_test_transformed, vector_kernel_test_transformed,
+            scalar_weight=weight_scalar, vector_weight=weight_vector,
             charge_mode='fit', dipole_normalized=dipole_normalize,
             write_residuals=write_residuals, print_residuals=print_residuals)
     LOGGER.info("Finished computing test residual: {:.6f}".format(

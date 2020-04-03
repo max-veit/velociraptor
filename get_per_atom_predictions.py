@@ -27,7 +27,7 @@ parser.add_argument(
     'scalar_kernel', help="Filename for the full-sparse (NM) scalar kernel, "
             "in atomic environment space")
 parser.add_argument(
-    'tensor_kernel', help="Filename for the full-sparse tensor kernel, mapping"
+    'vector_kernel', help="Filename for the full-sparse vector kernel, mapping"
             " Cartesian components to environments.  Must be in atomic format,"
             " i.e. one row per atom (where each entry is a 3x3 matrix).")
 parser.add_argument(
@@ -35,8 +35,8 @@ parser.add_argument(
             help="Weight of the scalar component (charges) in the model",
             required=True)
 parser.add_argument(
-    '-wt', '--tensor-weight', type=float, metavar='weight',
-            help="Weight of the tensor component (point dipoles) in the model",
+    '-wt', '--vector-weight', type=float, metavar='weight',
+            help="Weight of the vector component (point dipoles) in the model",
             required=True)
 parser.add_argument(
     '-wp', '--write-properties', metavar='FILE', help="File in which to write "
@@ -64,13 +64,13 @@ def load_kernels(args):
         scalar_kernel = np.load(args.scalar_kernel)
     else:
         scalar_kernel = np.array([])
-    if args.tensor_weight != 0:
-        tensor_kernel = np.load(args.tensor_kernel)
+    if args.vector_weight != 0:
+        vector_kernel = np.load(args.vector_kernel)
     else:
-        tensor_kernel = np.array([])
+        vector_kernel = np.array([])
     del args.scalar_kernel
-    del args.tensor_kernel
-    return (scalar_kernel, tensor_kernel)
+    del args.vector_kernel
+    return (scalar_kernel, vector_kernel)
 
 
 if __name__ == "__main__":
@@ -79,13 +79,13 @@ if __name__ == "__main__":
             and (args.write_properties_geoms is None)):
         raise ValueError("You don't want to write out the properties, so "
                          "there's nothing for me to do.")
-    scalar_kernel, tensor_kernel = load_kernels(args)
+    scalar_kernel, vector_kernel = load_kernels(args)
     geometries = ase.io.read(args.geometries, ':')
     weights = np.load(args.weights)
     del args.weights
     compute_per_atom_properties(
-            geometries, weights, scalar_kernel, tensor_kernel,
-            args.scalar_weight, args.tensor_weight,
+            geometries, weights, scalar_kernel, vector_kernel,
+            args.scalar_weight, args.vector_weight,
             args.transpose_full_kernels, args.spherical,
             args.write_properties, args.write_properties_geoms)
 
