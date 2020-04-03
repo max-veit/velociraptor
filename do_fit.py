@@ -144,8 +144,7 @@ def load_kernels(args):
             vector_kernel_sparse, vector_kernel)
 
 
-if __name__ == "__main__":
-    args = parser.parse_args()
+def prepare_data(args):
     if args.num_training_geometries > 0:
         n_train = args.num_training_geometries
         geometries = ase.io.read(args.geometries, slice(0, n_train))
@@ -192,17 +191,43 @@ if __name__ == "__main__":
     # Close files or free memory for what comes next
     del scalar_kernel_full_sparse
     del vector_kernel_full_sparse
+    train_data = {'dipoles': dipoles, 'charges': charges}
+    kernels = {
+        'scalar_kernel_sparse': scalar_kernel_sparse,
+        'scalar_kernel_transformed': scalar_kernel_transformed,
+        'vector_kernel_sparse': vector_kernel_sparse,
+        'vector_kernel_transformed': vector_kernel_transformed
+    }
+    return train_data, kernels, natoms_list
+
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    train_data, kernels, natoms_list = prepare_data(args)
+    weights_keys = ['scalar_weight', 'vector_weight', 'charge_mode',
+                    'dipole_regularizaion', 'charge_regularization',
+                    'sparse_jitter', 'condition_cutoff',
+                    'print_condition_number']
+    args_dict = vars(args)
+    weights_args = {key: args_dict[key] for key in args_dict
+                                        if key in weights_keys}
     weights = compute_weights(
-        dipoles, charges,
-        scalar_kernel_sparse, scalar_kernel_transformed,
-        vector_kernel_sparse, vector_kernel_transformed,
-        **vars(args))
+        train_data['dipoles'], train_data['charges'],
+        *[kernels[key] for key in [
+            'scalar_kernel_sparse', 'scalar_kernel_transformed',
+            'vector_kernel_sparse', 'vector_kernel_transformed']],
+        **weights_args)
     np.save(args.weights_output, weights)
     if args.print_residuals or (args.write_residuals is not None):
-        args.dipole_normalized = args.dipole_normalize
+        resids_keys = ['scalar_weight', 'vector_weight', 'charge_mode',
+                       'intrinsic_variation',
+                       'print_residuals', 'write_residuals']
+        resids_args = {key: args_dict[key] for key in args_dict
+                                           if key in resids_keys}
+        resids_args['dipole_normalized'] = args.dipole_normalize
         compute_residuals(weights, dipoles, charges, natoms_list,
                           scalar_kernel_transformed,
-                          vector_kernel_transformed, **vars(args))
+                          vector_kernel_transformed, **resids_args)
     if args.print_weight_norm:
         print("Norm (L2) of weights: {:.4f}".format(np.linalg.norm(weights)))
 
