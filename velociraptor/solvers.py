@@ -51,13 +51,16 @@ def merge_charges_dipoles(charges, dipoles):
 def split_charges_dipoles(charges_dipoles):
     """Split a combined charges-dipoles array into two
 
-    Return a tuple containing the charges and (2-D) diplole array
+    Return a tuple containing the charges and diplole array.  The final
+    dimension is assumed to index charge-dipoles; other dimensions are
+    preserved.
 
     This is effectively the inverse of merge_charges_dipoles().
     """
-    n_train = int(charges_dipoles.size / 4)
-    charges_dipoles = charges_dipoles.reshape((n_train, 4))
-    return charges_dipoles[:,0], charges_dipoles[:, 1:4]
+    n_train = int(charges_dipoles.shape[-1] / 4)
+    remaining_shape = charges_dipoles.shape[:-1]
+    charges_dipoles = charges_dipoles.reshape(remaining_shape + (n_train, 4))
+    return charges_dipoles[..., 0], charges_dipoles[..., 1:4]
 
 
 def compute_per_atom_scalar(geometries, weights, kernel_matrix):
@@ -189,11 +192,11 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         dipole_frac, charge_frac
     """
     charges_included = (charges_test is not None)
-    if hasattr(weights, 'shape') and len(weights.shape) == 1:
+    if hasattr(weights, 'shape'):
+        if not hasattr(kernel_matrix, 'shape'):
+            raise ValueError("Weights and kernel matrix must be either both "
+                             "arrays or both lists")
         # Assume we've been given arrays, not lists of arrays
-        if hasattr(kernel_matrix, 'shape') and len(kernel_matrix.shape) != 2:
-            raise ValueError("Confused about whether you're trying to specify "
-                             "one set or multiple sets of weights and kernel")
         weights = [weights]
         kernel_matrix = [kernel_matrix]
     elif len(weights) != len(kernel_matrix):
@@ -205,10 +208,12 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         data_test = dipoles_test.flatten()
     n_test = len(natoms_test)
     natoms_test = np.array(natoms_test)
+    data_shape = weights[0].shape[:-1] + data_test.shape
+    # TODO break all this up into sub-functions
     predicted = sum(
         (weights_one.dot(kernel_one.T)
          for weights_one, kernel_one in zip(weights, kernel_matrix)),
-        np.zeros_like(data_test))
+        np.zeros(data_shape))
     residuals = predicted - data_test
     residuals_out = dict()
     if charges_included:
@@ -217,22 +222,24 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         charge_residuals, dipole_residuals = split_charges_dipoles(residuals)
         residuals_out['charge_residuals'] = charge_residuals
     else:
-        dipoles_predicted = predicted.reshape(n_test, 3)
-        dipoles_test = data_test.reshape(n_test, 3)
-        dipole_residuals = residuals.reshape(n_test, 3)
+        new_shape = predicted.shape[:-1] + (n_test, 3)
+        dipoles_predicted = predicted.reshape(new_shape)
+        dipoles_test = data_test.reshape(new_shape)
+        dipole_residuals = residuals.reshape(new_shape)
     # DANGER WILL ROBINSON: These residuals are either per-molecule or
     # normalized per atom, depending on the setting of dipole_normalized
     residuals_out['dipole_residuals'] = dipole_residuals
     if dipole_normalized:
         residuals_out['dipole_scaling'] = natoms_test
         dipole_norms_predicted = np.sqrt(
-                np.sum((dipoles_predicted.T * natoms_test)**2, axis=0))
+                np.sum((dipoles_predicted * natoms_test[:, np.newaxis])**2,
+                       axis=-1))
         dipole_norms_test = np.sqrt(
                 np.sum((dipoles_test.T * natoms_test)**2, axis=0))
     else:
         residuals_out['dipole_scaling'] = np.ones(len(natoms_test))
         dipole_norms_predicted = np.sqrt(
-                np.sum(dipoles_predicted.T**2, axis=0))
+                np.sum(dipoles_predicted**2, axis=-1))
         dipole_norms_test = np.sqrt(np.sum(dipoles_test.T**2, axis=0))
     residuals_out['dipole_norms_predicted'] = dipole_norms_predicted
     residuals_out['dipole_norms_test'] = dipole_norms_test
@@ -241,10 +248,12 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     # doesn't really make sense to scale this by the number of atoms, I think)
     if return_rmse:
         if dipole_normalized:
-            dipole_rmse = np.sqrt(np.sum(dipole_residuals**2) / n_test)
-        else:
-            dipole_rmse = np.sqrt(np.sum((dipole_residuals.T / natoms_test)**2)
+            dipole_rmse = np.sqrt(np.sum(dipole_residuals**2, axis=(-1, -2))
                                   / n_test)
+        else:
+            dipole_rmse = np.sqrt(
+                np.sum((dipole_residuals / natoms_test[:, np.newaxis])**2,
+                       axis=(-1, -2)) / n_test)
         # but the RMSEs are always per-atom
         residuals_out['dipole_rmse'] = dipole_rmse
         if intrinsic_dipole_std is None:
@@ -258,11 +267,12 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         residuals_out['dipole_frac'] = dipole_rmse / intrinsic_dipole_std
         if charges_included:
             if dipole_normalized:
-                charge_rmse = np.sqrt(np.sum(charge_residuals**2) / n_test)
+                charge_rmse = np.sqrt(np.sum(charge_residuals**2, axis=-1)
+                                      / n_test)
                 charge_std = np.std(charges_test)
             else:
                 charge_rmse = np.sqrt(np.sum(
-                    (charge_residuals / natoms_test)**2) / n_test)
+                    (charge_residuals / natoms_test)**2, axis=-1) / n_test)
                 charge_std = np.std(charges_test / natoms_test)
             residuals_out['charge_rmse'] = charge_rmse
             if charge_std == 0.:
@@ -271,7 +281,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
                 residuals_out['charge_frac'] = charge_rmse / charge_std
     if return_norm_mae:
         residuals_out['dipole_norm_mae'] = np.mean(
-                np.abs(dipole_norms_predicted - dipole_norms_test))
+                np.abs(dipole_norms_predicted - dipole_norms_test), axis=-1)
     return residuals_out
 
 
