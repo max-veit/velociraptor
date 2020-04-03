@@ -118,6 +118,17 @@ parser.add_argument(
     '-st', '--spherical-tensor-ordering', action='store_true',
            dest='spherical', help="Transform the vector kernels from spherical"
            " tensor to the internal Cartesian ordering")
+parser.add_argument(
+    '-c', '--fit-committee', nargs=2, metavar=('N', 'n'), help="Fit N different "
+            "models, each by randomly drawing n distinct data points from the "
+            "training set (note that this is done after downsampling to '-nt' "
+            "training points).  The output weights (and residuals, if "
+            "requested) then get an extra final dimension corresponding to "
+            "committee number.")
+parser.add_argument(
+    '-cr', '--committee-with-replacement', action='store_true', help="Sample "
+            "training points for model committee with replacement (default is "
+            "without replacement)")
 
 
 def load_kernels(args):
@@ -201,6 +212,35 @@ def prepare_data(args):
     return train_data, kernels, natoms_list
 
 
+def generate_subsamples(n_train, n_models, subsample_size,
+                        with_replacement=False):
+    if subsample_size > n_train:
+        raise ValueError("Subsample size must be smaller than number of total"
+                         "training points")
+    return [np.random.choice(n_train, subsample_size,
+                             replace=with_replacement)
+            for i in range(n_models)]
+
+
+def subsample_train_data(indices, train_data, kernels):
+    subsampled_train_data = {
+        'dipoles': train_data['dipoles'][indices],
+        'charges': train_data['charges'][indices]
+    }
+    n_components = 4
+    kernel_indices = (np.repeat(indices[:,np.newaxis], n_components, axis=1)
+                      * n_components + np.arange(n_components)).flat
+    subsampled_kernels = {
+        'scalar_kernel_sparse': kernels['scalar_kernel_sparse'],
+        'scalar_kernel_transformed':
+            kernels['scalar_kernel_transformed'][kernel_indices],
+        'vector_kernel_sparse': kernels['vector_kernel_sparse'],
+        'vector_kernel_transformed':
+            kernels['vector_kernel_transformed'][kernel_indices]
+    }
+    return subsampled_train_data, subsampled_kernels
+
+
 if __name__ == "__main__":
     args = parser.parse_args()
     train_data, kernels, natoms_list = prepare_data(args)
@@ -211,12 +251,27 @@ if __name__ == "__main__":
     args_dict = vars(args)
     weights_args = {key: args_dict[key] for key in args_dict
                                         if key in weights_keys}
-    weights = compute_weights(
-        train_data['dipoles'], train_data['charges'],
-        *[kernels[key] for key in [
-            'scalar_kernel_sparse', 'scalar_kernel_transformed',
-            'vector_kernel_sparse', 'vector_kernel_transformed']],
-        **weights_args)
+    if args.fit_committee is None:
+        weights = compute_weights(
+            train_data['dipoles'], train_data['charges'],
+            *[kernels[key] for key in [
+                'scalar_kernel_sparse', 'scalar_kernel_transformed',
+                'vector_kernel_sparse', 'vector_kernel_transformed']],
+            **weights_args)
+    else:
+        samples = generate_subsamples(args.num_training_geometries,
+            *args.fit_committee, args.committee_with_replacement)
+        weights_bundle = []
+        for sample in samples:
+            sub_data, sub_kernels = subsampled_train_data(
+                    sample, train_data, kernels)
+            weights_bundle.append(compute_weights(
+                sub_data['dipoles'], sub_data['charges'],
+                *[sub_kernels[key] for key in [
+                    'scalar_kernel_sparse', 'scalar_kernel_transformed',
+                    'vector_kernel_sparse', 'vector_kernel_transformed']],
+                **weights_args))
+        weights = np.stack(weights_bundle)
     np.save(args.weights_output, weights)
     if args.print_residuals or (args.write_residuals is not None):
         resids_keys = ['scalar_weight', 'vector_weight', 'charge_mode',
