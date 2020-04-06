@@ -3,6 +3,7 @@
 
 
 import argparse
+from collections import defaultdict
 import logging
 import os
 
@@ -232,14 +233,17 @@ def subsample_train_data(indices, train_data, kernels):
     n_components = 4
     kernel_indices = (np.repeat(indices[:,np.newaxis], n_components, axis=1)
                       * n_components + np.arange(n_components)).flat
-    subsampled_kernels = {
-        'scalar_kernel_sparse': kernels['scalar_kernel_sparse'],
-        'scalar_kernel_transformed':
-            kernels['scalar_kernel_transformed'][kernel_indices],
+    subsampled_kernels = defaultdict(lambda: np.array([]))
+    if kernels['scalar_kernel_sparse'].size > 0:
+        subsampled_kernels.update({
+            'scalar_kernel_sparse': kernels['scalar_kernel_sparse'],
+            'scalar_kernel_transformed':
+                kernels['scalar_kernel_transformed'][kernel_indices]})
+    if kernels['vector_kernel_sparse'].size > 0:
+        subsampled_kernels.update({
         'vector_kernel_sparse': kernels['vector_kernel_sparse'],
         'vector_kernel_transformed':
-            kernels['vector_kernel_transformed'][kernel_indices]
-    }
+            kernels['vector_kernel_transformed'][kernel_indices]})
     return subsampled_train_data, subsampled_kernels
 
 
@@ -265,7 +269,7 @@ if __name__ == "__main__":
             *args.fit_committee, args.committee_with_replacement)
         weights_bundle = []
         for sample in samples:
-            sub_data, sub_kernels = subsampled_train_data(
+            sub_data, sub_kernels = subsample_train_data(
                     sample, train_data, kernels)
             weights_bundle.append(compute_weights(
                 sub_data['dipoles'], sub_data['charges'],
