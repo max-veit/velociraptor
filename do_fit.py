@@ -282,8 +282,8 @@ if __name__ == "__main__":
         resids_args = {key: args_dict[key] for key in args_dict
                                            if key in resids_keys}
         resids_args['dipole_normalized'] = args.dipole_normalize
-        compute_residuals(weights, dipoles, charges, natoms_list,
-                          scalar_kernel_transformed,
+        compute_residuals(weights, train_data['dipoles'], train_data['charges'],
+                          natoms_list, scalar_kernel_transformed,
                           vector_kernel_transformed, **resids_args)
     if args.print_weight_norm:
         print("Norm (L2) of weights: {:.4f}".format(np.linalg.norm(weights)))
