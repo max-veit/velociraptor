@@ -176,7 +176,7 @@ def prepare_data(args):
                     "plain text.")
         dipoles = np.loadtxt(args.dipoles)[:n_train]
     del args.dipoles
-    natoms_list = [geom.get_number_of_atoms() for geom in geometries]
+    natoms_list = [len(geom) for geom in geometries]
     if args.dipole_normalize:
         dipoles = (dipoles.T / natoms_list).T
         charges = charges / natoms_list

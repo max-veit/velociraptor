@@ -336,7 +336,7 @@ if __name__ == "__main__":
     else:
         dipole_filename = args.dipoles
     dipoles = load_detect_matrix(dipole_filename)[:n_train]
-    natoms_list = [geom.get_number_of_atoms() for geom in geometries]
+    natoms_list = [len(geom) for geom in geometries]
     dipole_normalize = True # seems to be the best option
     if args.cv_file is not None:
         try:

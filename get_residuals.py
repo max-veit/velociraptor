@@ -105,7 +105,7 @@ if __name__ == "__main__":
                          "there's nothing for me to do.")
     scalar_kernel, vector_kernel = load_kernels(args)
     geometries = ase.io.read(args.geometries, ':')
-    natoms_list = [geom.get_number_of_atoms() for geom in geometries]
+    natoms_list = [len(geom) for geom in geometries]
     scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
             geometries, scalar_kernel, args.scalar_weight,
             vector_kernel, args.vector_weight, args.vector_kernel_molecular,

@@ -381,7 +381,7 @@ def compute_residual(dipole_reg, charge_reg, weight_scalar, weight_vector,
         if weight_vector != 0.0:
             recompute_vector_kernels(**kparams, workdir=workdir)
     if dipole_normalize:
-        natoms_train = [geom.get_number_of_atoms() for geom in geoms_train]
+        natoms_train = [len(geom) for geom in geoms_train]
         dipoles_train = (dipoles_train.T / natoms_train).T
     charges_train = get_charges(geoms_train)
     (scalar_kernel_sparse, scalar_kernel_transformed,
@@ -433,7 +433,7 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_vector,
         (vector_kernel_transposed,
          vector_kernel_molecular) = infer_kernel_convention(
                 vector_kernel_full_sparse.shape, len(geoms),
-                sum(geom.get_number_of_atoms() for geom in geoms))
+                sum(len(geom) for geom in geoms))
         if vector_kernel_transposed:
             raise ValueError("Transposed vector kernels are no longer "
                              "supported (re-generating is best)")
@@ -491,7 +491,7 @@ def compute_cv_residual(
                 workdir, 'cv_{:d}_weights.npy'.format(cv_num)), weights)
         (dipoles_test, charges_test, geoms_test,
          scalar_kernel_test, vector_kernel_test) = cv_test
-        natoms_test = [geom.get_number_of_atoms() for geom in geoms_test]
+        natoms_test = [len(geom) for geom in geoms_test]
         write_residuals = (
                 os.path.join(workdir, 'cv_{:d}_residuals.npz'.format(cv_num))
                 if write_results else None)
@@ -518,7 +518,7 @@ def compute_residual_from_weights(weights, weight_scalar, weight_vector,
                                   write_results=True, print_residuals=True):
     dipoles_test = np.load(os.path.join(workdir, 'dipoles_test.npy'))
     geoms_test = ase.io.read(os.path.join(workdir, 'qm7_test.xyz'), ':')
-    natoms_test = np.array([geom.get_number_of_atoms() for geom in geoms_test])
+    natoms_test = np.array([len(geom) for geom in geoms_test])
     charges_test = get_charges(geoms_test)
     if dipole_normalize:
         dipoles_test = dipoles_test / natoms_test[:, np.newaxis]

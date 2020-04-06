@@ -60,7 +60,7 @@ def transform_envts_charge_dipoles(molecules, target_matrix,
         target_shape_new = (4 * len(molecules), target_matrix.shape[1])
     else:
         raise ValueError("Cannot operate on a 0-d array")
-    if target_matrix.shape[0] != sum(mol.get_number_of_atoms()
+    if target_matrix.shape[0] != sum(len(mol)
                                      for mol in molecules):
         raise ValueError("Target matrix must have as many rows (columns, if "
                          "transposed) as environments (i.e. atoms) in the "
@@ -68,7 +68,7 @@ def transform_envts_charge_dipoles(molecules, target_matrix,
     target_transformed = np.empty(target_shape_new)
     environ_idx = 0
     for mol_idx, molecule in enumerate(molecules):
-        natoms_mol = molecule.get_number_of_atoms()
+        natoms_mol = len(molecule)
         molecule_target = target_matrix[environ_idx:environ_idx+natoms_mol]
         environ_idx += natoms_mol
         molecule_positions = molecule.get_positions()
@@ -106,7 +106,7 @@ def transform_envts_partial_charges(molecules, target_matrix,
         target_transformed = target_matrix.transpose()
     else:
         target_transformed = target_matrix
-    if target_transformed.shape[0] != sum(mol.get_number_of_atoms()
+    if target_transformed.shape[0] != sum(len(mol)
                                           for mol in molecules):
         raise ValueError("Target matrix must have as many rows (columns, if "
                          "transposed) as environments (i.e. atoms) in the "
@@ -174,7 +174,7 @@ def transform_vector_envts_charge_dipoles(
     else:
         target_n_envs = target_matrix.shape[1]
         target_shape_new = (len(molecules)*4, target_shape[0] * 3)
-    if target_n_envs != sum(mol.get_number_of_atoms()
+    if target_n_envs != sum(len(mol)
                             for mol in molecules):
         raise ValueError("Target matrix must have as many rows (columns, if "
                          "transposed) as environments (i.e. atoms) in the "
@@ -184,7 +184,7 @@ def transform_vector_envts_charge_dipoles(
     target_transformed = np.empty(target_shape_new)
     environ_idx = 0
     for mol_idx, molecule in enumerate(molecules):
-        natoms_mol = molecule.get_number_of_atoms()
+        natoms_mol = len(molecule)
         # Charge correlation iz sero
         target_transformed[4*mol_idx] = 0.
         if not transpose_kernel:
@@ -242,7 +242,7 @@ def transform_vector_envts_atomic_dipoles(
     else:
         target_n_envs = target_matrix.shape[1]
         target_shape_new = (target_n_envs * 3, target_shape[0] * 3)
-    if target_n_envs != sum(mol.get_number_of_atoms()
+    if target_n_envs != sum(len(mol)
                             for mol in molecules):
         raise ValueError("Target matrix must have as many rows (columns, if "
                          "transposed) as environments (i.e. atoms) in the "
@@ -314,7 +314,7 @@ def transform_vector_mols_charge_dipoles(
     if spherical:
         target_matrix = target_matrix[:, :, [2, 0, 1]][:, :, :, [2, 0, 1]]
     if dipole_unnormalize:
-        natoms_mol = np.array([mol.get_number_of_atoms() for mol in molecules])
+        natoms_mol = np.array([len(mol) for mol in molecules])
         if not transpose_kernel:
             target_matrix *= natoms_mol.reshape(-1, 1, 1, 1)
         else:
@@ -355,7 +355,7 @@ def transform_charge_dipoles_envts(molecules, target_matrix):
     the centre of geometry of the molecule (mean of the positions of all
     the atoms in the molecule).
     """
-    n_environments = sum(mol.get_number_of_atoms() for mol in molecules)
+    n_environments = sum(len(mol) for mol in molecules)
     if len(target_matrix.shape) == 1:
         target_transformed = np.empty((n_environments,))
     elif len(target_matrix.shape) > 1:
@@ -367,7 +367,7 @@ def transform_charge_dipoles_envts(molecules, target_matrix):
                          "charge+dipole entries (4 * number of molecules)")
     environ_idx = 0
     for mol_idx, molecule in enumerate(molecules):
-        natoms_mol = molecule.get_number_of_atoms()
+        natoms_mol = len(molecule)
         molecule_target = target_matrix[mol_idx*4:(mol_idx+1)*4]
         molecule_positions = molecule.get_positions()
         molecule_positions -= np.mean(molecule_positions, axis=0)

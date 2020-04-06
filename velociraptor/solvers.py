@@ -84,13 +84,13 @@ def compute_per_atom_scalar(geometries, weights, kernel_matrix):
     'partial_charge', and the resulting dipoles under
     'atomic_dipoles_l0'.
     """
-    if kernel_matrix.shape[0] != sum(geom.get_number_of_atoms()
+    if kernel_matrix.shape[0] != sum(len(geom)
                                      for geom in geometries):
         raise ValueError("Kernel matrix must have as many rows as " +
                          "environments (atoms) in the list of geometries")
     environ_idx = 0
     for geom in geometries:
-        natoms_geom = geom.get_number_of_atoms()
+        natoms_geom = len(geom)
         geom_kernel = kernel_matrix[environ_idx:environ_idx+natoms_geom]
         partial_charges = geom_kernel.dot(weights)
         geom_positions = geom.get_positions()
@@ -121,7 +121,7 @@ def compute_per_atom_vector(geometries, weights, kernel_matrix):
     The atomic dipoles are stored under the 'atoms.arrays' key
     'atomic_dipole_l1'.
     """
-    if kernel_matrix.shape[0] != sum(geom.get_number_of_atoms()
+    if kernel_matrix.shape[0] != sum(len(geom)
                                      for geom in geometries):
         raise ValueError("Kernel matrix must have as many rows as " +
                          "environments (atoms) in the list of geometries")
@@ -131,7 +131,7 @@ def compute_per_atom_vector(geometries, weights, kernel_matrix):
     environ_idx = 0
     n_sparse = kernel_matrix.shape[1]
     for geom in geometries:
-        natoms_geom = geom.get_number_of_atoms()
+        natoms_geom = len(geom)
         geom_kernel = kernel_matrix[environ_idx:environ_idx+natoms_geom]
         geom_kernel = geom_kernel.swapaxes(1, 2).reshape(
                 (natoms_geom, 3, n_sparse*3))
