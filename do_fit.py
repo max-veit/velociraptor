@@ -119,12 +119,14 @@ parser.add_argument(
            dest='spherical', help="Transform the vector kernels from spherical"
            " tensor to the internal Cartesian ordering")
 parser.add_argument(
-    '-c', '--fit-committee', nargs=2, metavar=('N', 'n'), help="Fit N different "
-            "models, each by randomly drawing n distinct data points from the "
-            "training set (note that this is done after downsampling to '-nt' "
-            "training points).  The output weights (and residuals, if "
-            "requested) then get an extra final dimension corresponding to "
-            "committee number.")
+    '-c', '--fit-committee', nargs=2, type=int, metavar=('N', 'n'),
+            help="""Fit N different models, each by randomly drawing n distinct
+            data points from the training set (note that this is done after
+            downsampling to '-nt' training points).  The output weights
+            (and residuals, if requested) then get an extra final dimension
+            corresponding to committee number.  The selection indices of the
+            models set are written to a file with the same base filename as
+            the weights, with '.model_idces' appended.""")
 parser.add_argument(
     '-cr', '--committee-with-replacement', action='store_true', help="Sample "
             "training points for model committee with replacement (default is "
