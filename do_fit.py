@@ -272,6 +272,8 @@ if __name__ == "__main__":
                     'vector_kernel_sparse', 'vector_kernel_transformed']],
                 **weights_args))
         weights = np.stack(weights_bundle)
+        np.save(os.path.splitext(args.weights_output)[0] + '.model_idces',
+                samples)
     np.save(args.weights_output, weights)
     if args.print_residuals or (args.write_residuals is not None):
         resids_keys = ['scalar_weight', 'vector_weight', 'charge_mode',
