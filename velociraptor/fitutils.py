@@ -355,14 +355,29 @@ def compute_residuals(
         intrinsic_dipole_std=intrinsic_variation,
         dipole_normalized=dipole_normalized)
     if print_residuals:
+        # TODO violates DRY; make a function
         if 'dipole_rmse' in residuals:
-            print(
-                "Dipole RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
-                    residuals['dipole_rmse'], residuals['dipole_frac']))
+            first_line = True
+            for rmse, frac in np.nditer((residuals['dipole_rmse'],
+                                         residuals['dipole_frac'])):
+                if first_line:
+                    prefix = "Dipole RMSE(s): "
+                else:
+                    prefix = "                "
+                print("{:s}{:.10f} : {:.10f} of intrinsic variation".format(
+                        prefix, rmse, frac))
+                first_line = False
         if 'charge_rmse' in residuals:
-            print(
-                "Charge RMSE: {:.10f} : {:.10f} of intrinsic variation".format(
-                    residuals['charge_rmse'], residuals['charge_frac']))
+            first_line = True
+            for rmse, frac in np.nditer((residuals['charge_rmse'],
+                                         residuals['charge_frac'])):
+                if first_line:
+                    prefix = "Charge RMSE(s): "
+                else:
+                    prefix = "                "
+                print("{:s}{:.10f} : {:.10f} of intrinsic variation".format(
+                        prefix, rmse, frac))
+                first_line = False
     if write_residuals is not None:
         np.savez(write_residuals, **residuals)
     return residuals
