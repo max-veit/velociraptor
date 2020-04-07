@@ -224,7 +224,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     else:
         new_shape = predicted.shape[:-1] + (n_test, 3)
         dipoles_predicted = predicted.reshape(new_shape)
-        dipoles_test = data_test.reshape(new_shape)
+        dipoles_test = data_test.reshape((n_test, 3))
         dipole_residuals = residuals.reshape(new_shape)
     # DANGER WILL ROBINSON: These residuals are either per-molecule or
     # normalized per atom, depending on the setting of dipole_normalized
