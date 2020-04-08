@@ -348,7 +348,7 @@ def compute_residuals(
         kernels = [scalar_kernel_transformed, vector_kernel_transformed]
         weights = np.split(weights,
                            np.array([scalar_kernel_transformed.shape[1]]),
-                           axis=0)
+                           axis=1)
     residuals = solvers.compute_residuals(
         weights, kernels, dipoles, natoms_list,
         charges_test=charges_test, return_rmse=True, return_norm_mae=True,
