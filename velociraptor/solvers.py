@@ -152,17 +152,12 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
 
     Parameters:
         weights     Weights computed for the fit
-                    In the case of a multi-model fit with independent
-                    kernels (i.e. a block-diagonal total kernel matrix),
-                    this may also be a list of arrays of weights, one
-                    for each model.  The residual is computed as the
-                    difference from the sum of each independent model.
         kernel_matrix
-                    Kernel between model basis functions (rows) and test
-                    dipoles, optionally with charges.  Order should be
-                    (charge), x, y, z, per configuration.
-                    As above, this may also be a list of kernel matrices
-                    of the same length as 'weights'.
+                    Kernel between model basis functions (columns, one
+                    per weight) and test dipoles, optionally with charges.
+                    Order should be (charge), x, y, z, per configuration.
+                    Charge rows must be included _iff_ 'charges_test' is
+                    provided.
         dipoles_test
                     Computed ("exact") dipoles for the test set
         natoms_test List containing the number of atoms for each geometry
@@ -192,28 +187,14 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         dipole_frac, charge_frac
     """
     charges_included = (charges_test is not None)
-    if hasattr(weights, 'shape'):
-        if not hasattr(kernel_matrix, 'shape'):
-            raise ValueError("Weights and kernel matrix must be either both "
-                             "arrays or both lists")
-        # Assume we've been given arrays, not lists of arrays
-        weights = [weights]
-        kernel_matrix = [kernel_matrix]
-    elif len(weights) != len(kernel_matrix):
-        raise ValueError("Must supply the same number of sets of weights "
-                         "and kernel matrices")
     if charges_included:
         data_test = merge_charges_dipoles(charges_test, dipoles_test)
     else:
         data_test = dipoles_test.flatten()
     n_test = len(natoms_test)
     natoms_test = np.array(natoms_test)
-    data_shape = weights[0].shape[:-1] + data_test.shape
     # TODO break all this up into sub-functions
-    predicted = sum(
-        (weights_one.dot(kernel_one.T)
-         for weights_one, kernel_one in zip(weights, kernel_matrix)),
-        np.zeros(data_shape))
+    predicted = weights.dot(kernel.T)
     residuals = predicted - data_test
     residuals_out = dict()
     if charges_included:
@@ -237,7 +218,11 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
         dipole_norms_test = np.sqrt(
                 np.sum((dipoles_test.T * natoms_test)**2, axis=0))
     else:
-        residuals_out['dipole_scaling'] = np.ones(len(natoms_test))
+        # TODO setting scaling to one means there is no number-of-atoms
+        # information in the output, so it's impossible to compute
+        # per-atom RMSEs using just the information there.  Consider
+        # storing natoms in a different entry
+        residuals_out['dipole_scaling'] = np.ones(n_test)
         dipole_norms_predicted = np.sqrt(
                 np.sum(dipoles_predicted**2, axis=-1))
         dipole_norms_test = np.sqrt(np.sum(dipoles_test.T**2, axis=0))
