@@ -194,7 +194,7 @@ def compute_residuals(weights, kernel_matrix, dipoles_test, natoms_test,
     n_test = len(natoms_test)
     natoms_test = np.array(natoms_test)
     # TODO break all this up into sub-functions
-    predicted = weights.dot(kernel.T)
+    predicted = weights.dot(kernel_matrix.T)
     residuals = predicted - data_test
     residuals_out = dict()
     if charges_included:
