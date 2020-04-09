@@ -251,12 +251,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     train_data, kernels, natoms_list = prepare_data(args)
     weights_keys = ['scalar_weight', 'vector_weight', 'charge_mode',
-                    'dipole_regularizaion', 'charge_regularization',
+                    'dipole_regularization', 'charge_regularization',
                     'sparse_jitter', 'condition_cutoff',
                     'print_condition_number']
     args_dict = vars(args)
-    weights_args = {key: args_dict[key] for key in args_dict
-                                        if key in weights_keys}
+    weights_args = {key: args_dict[key] for key in weights_keys}
     if args.fit_committee is None:
         weights = compute_weights(
             train_data['dipoles'], train_data['charges'],
@@ -285,8 +284,7 @@ if __name__ == "__main__":
         resids_keys = ['scalar_weight', 'vector_weight', 'charge_mode',
                        'intrinsic_variation',
                        'print_residuals', 'write_residuals']
-        resids_args = {key: args_dict[key] for key in args_dict
-                                           if key in resids_keys}
+        resids_args = {key: args_dict[key] for key in resids_keys}
         resids_args['dipole_normalized'] = args.dipole_normalize
         compute_residuals(weights, train_data['dipoles'], train_data['charges'],
                           natoms_list,
