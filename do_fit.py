@@ -282,7 +282,6 @@ if __name__ == "__main__":
     np.save(args.weights_output, weights)
     if args.print_residuals or (args.write_residuals is not None):
         resids_keys = ['scalar_weight', 'vector_weight', 'charge_mode',
-                       'intrinsic_variation',
                        'print_residuals', 'write_residuals']
         resids_args = {key: args_dict[key] for key in resids_keys}
         resids_args['dipole_normalized'] = args.dipole_normalize
