@@ -266,8 +266,8 @@ def recompute_vector_kernels(
     # test-train(sparse)
     if atoms_filename_test is not None:
         compute_vector_kernel(
-                'PS1_{:s}_sparse.npy'.format(test_name),
-                'PS0v_{:s}_sparse.npy'.format(test_name),
+                'PS1_{:s}.npy'.format(test_name),
+                'PS0v_{:s}.npy'.format(test_name),
                 'PS1_{:s}_atomic_sparse.npy'.format(train_name),
                 'PS0v_{:s}_atomic_sparse.npy'.format(train_name),
                 'PS1_{:s}_natoms.npy'.format(test_name),
