@@ -33,8 +33,9 @@ NCPUS = int(os.environ.get('SLURM_CPUS_PER_TASK', 8))
 def compute_power_spectra(
         n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS', lambda_=0,
         atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
-        n_sparse_components=500, feat_sparsefile=None,
-        species_list='H C N O S Cl'.split()):
+        n_sparse_components=500, feat_sparsefile=None, species_list=None):
+    if species_list is None:
+        species_list = 'H C N O S Cl'.split()
     # These PS parameters are unlikely to change
     rad_c = 1
     r_cut = 5.0
@@ -94,11 +95,11 @@ def compute_power_spectra(
 def compute_scalar_power_spectra(
         n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0',
         atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
-        n_sparse_components=500, feat_sparsefile=None):
+        n_sparse_components=500, feat_sparsefile=None, species_list=None):
     lambda_ = 0
     compute_power_spectra(n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix,
                           lambda_, atoms_file, workdir, n_sparse_envs,
-                          n_sparse_components, feat_sparsefile)
+                          n_sparse_components, feat_sparsefile, species_list)
 
 
 def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
@@ -169,87 +170,109 @@ def compute_vector_kernel(ps_name, ps0_name, ps_second_name=None,
 def recompute_scalar_kernels(
         n_max, l_max, atom_width, rad_r0, rad_m,
         atoms_filename_train='qm7_train.xyz', atoms_filename_test=None,
-        n_sparse_envs=2000, n_sparse_components=500, workdir=None):
+        n_sparse_envs=2000, n_sparse_components=500, workdir=None,
+        test_name='test', train_name='train',
+        kernel_suffix='', species_list=None):
+    if kernel_suffix:
+        kernel_suffix = '_{:s}'.format(kernel_suffix)
     # number of sparse envs is another convergence parameter
     compute_scalar_power_spectra(
-            n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_train',
+            n_max, l_max, atom_width, rad_r0, rad_m,
+            ps_prefix='PS0_{:s}'.format(train_name),
             atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
-            n_sparse_components=n_sparse_components)
+            n_sparse_components=n_sparse_components, species_list=species_list)
     # Make sure feat sparsification uses the PS0_train values!
     # (and don't sparsify on envs)
     if atoms_filename_test is not None:
         compute_scalar_power_spectra(
-                n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0_test',
+                n_max, l_max, atom_width, rad_r0, rad_m,
+                ps_prefix='PS0_{:s}'.format(test_name),
                 atoms_file=atoms_filename_test, workdir=workdir,
-                feat_sparsefile='PS0_train', n_sparse_envs=-1)
+                feat_sparsefile='PS0_{:s}'.format(train_name),
+                n_sparse_envs=-1, species_list=species_list)
     # compute kernels (soapfast)
     zeta = 2 # possibly another parameter to gridsearch
     # sparse-sparse
-    compute_scalar_kernel('PS0_train_atomic_sparse.npy', kernel_name='K0_MM',
-                          zeta=zeta, workdir=workdir)
+    compute_scalar_kernel('PS0_{:s}_atomic_sparse.npy'.format(train_name),
+                          kernel_name=('K0_MM' + kernel_suffix), zeta=zeta,
+                          workdir=workdir)
     # full-sparse
     compute_scalar_kernel(
-            'PS0_train_atomic.npy', 'PS0_train_atomic_sparse.npy', zeta=zeta,
-            kernel_name='K0_NM', workdir=workdir)
+            'PS0_{:s}_atomic.npy'.format(train_name),
+            'PS0_{:s}_atomic_sparse.npy'.format(train_name), zeta=zeta,
+            kernel_name=('K0_NM' + kernel_suffix), workdir=workdir)
     # test-train(sparse)
     if atoms_filename_test is not None:
         compute_scalar_kernel(
-                'PS0_test_atomic.npy', 'PS0_train_atomic_sparse.npy',
+                'PS0_{:s}_atomic.npy'.format(test_name),
+                'PS0_{:s}_atomic_sparse.npy'.format(train_name),
                 zeta=zeta, kernel_name='K0_TM', workdir=workdir)
 
 
 def recompute_vector_kernels(
         n_max, l_max, atom_width, rad_r0, rad_m,
         atoms_filename_train='qm7_train.xyz', atoms_filename_test=None,
-        n_sparse_envs=2000, n_sparse_components=500, workdir=None):
+        n_sparse_envs=2000, n_sparse_components=500, workdir=None,
+        test_name='test', train_name='train', kernel_suffix='',
+        species_list=None):
+    if kernel_suffix:
+        kernel_suffix = '_{:s}'.format(kernel_suffix)
     compute_power_spectra(
             n_max, l_max, atom_width, rad_r0, rad_m, lambda_=1,
-            ps_prefix='PS1_train',
+            ps_prefix='PS1_{:s}'.format(train_name),
             atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
-            n_sparse_components=n_sparse_components)
+            n_sparse_components=n_sparse_components, species_list=species_list)
     # Scalar power spectra are also needed for nonlinear vector kernels
     # Different name than for scalar kernels because the optimal
     # parameters for the two kernels will usually be different
     compute_power_spectra(
             n_max, l_max, atom_width, rad_r0, rad_m, lambda_=0,
-            ps_prefix='PS0v_train',
+            ps_prefix='PS0v_{:s}'.format(train_name),
             atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
-            n_sparse_components=n_sparse_components)
+            n_sparse_components=n_sparse_components, species_list=species_list)
     # Make sure feat sparsification for test uses the train values!
     # (and don't sparsify on envs)
     if atoms_filename_test is not None:
         compute_power_spectra(
                 n_max, l_max, atom_width, rad_r0, rad_m, lambda_=1,
-                ps_prefix='PS1_test',
+                ps_prefix='PS1_{:s}'.format(test_name),
                 atoms_file=atoms_filename_test, workdir=workdir,
-                feat_sparsefile='PS1_train', n_sparse_envs=-1)
+                feat_sparsefile='PS1_{:s}'.format(train_name),
+                n_sparse_envs=-1, species_list=species_list)
         compute_power_spectra(
                 n_max, l_max, atom_width, rad_r0, rad_m, lambda_=0,
-                ps_prefix='PS0v_test',
+                ps_prefix='PS0v_{:s}'.format(test_name),
                 atoms_file=atoms_filename_test, workdir=workdir,
-                feat_sparsefile='PS0v_train', n_sparse_envs=-1)
+                feat_sparsefile='PS0v_{:s}'.format(train_name),
+                n_sparse_envs=-1, species_list=species_list)
     # compute kernels (soapfast)
     zeta = 2 # possibly another parameter to gridsearch
     # sparse-sparse
-    compute_vector_kernel('PS1_train_atomic_sparse.npy',
-                          'PS0v_train_atomic_sparse.npy', kernel_name='K1_MM',
-                          zeta=zeta, workdir=workdir)
+    compute_vector_kernel('PS1_{:s}_atomic_sparse.npy'.format(train_name),
+                          'PS0v_{:s}_atomic_sparse.npy'.format(train_name),
+                          kernel_name=('K1_MM' + kernel_suffix), zeta=zeta,
+                          workdir=workdir)
     # full-sparse
     compute_vector_kernel(
-            'PS1_train_sparse.npy', 'PS0v_train_sparse.npy',
-            'PS1_train_atomic_sparse.npy', 'PS0v_train_atomic_sparse.npy',
-            'PS1_train_natoms.npy',
-            zeta=zeta, kernel_name='K1_NM', workdir=workdir)
+            'PS1_{:s}_sparse.npy'.format(train_name),
+            'PS0v_{:s}_sparse.npy'.format(train_name),
+            'PS1_{:s}_atomic_sparse.npy'.format(train_name),
+            'PS0v_{:s}_atomic_sparse.npy'.format(train_name),
+            'PS1_{:s}_natoms.npy'.format(train_name),
+            zeta=zeta, kernel_name=('K1_NM' + kernel_suffix), workdir=workdir)
     # test-train(sparse)
     if atoms_filename_test is not None:
         compute_vector_kernel(
-                'PS1_test_sparse.npy', 'PS0v_test_sparse.npy',
-                'PS1_train_atomic_sparse.npy', 'PS0v_train_atomic_sparse.npy',
-                'PS1_test_natoms.npy',
-                zeta=zeta, kernel_name='K1_TM', workdir=workdir)
+                'PS1_{:s}_sparse.npy'.format(test_name),
+                'PS0v_{:s}_sparse.npy'.format(test_name),
+                'PS1_{:s}_atomic_sparse.npy'.format(train_name),
+                'PS0v_{:s}_atomic_sparse.npy'.format(train_name),
+                'PS1_{:s}_natoms.npy'.format(test_name),
+                zeta=zeta, kernel_name=('K1_TM' + kernel_suffix),
+                workdir=workdir)
 
 
 #TODO this is a classic case of DRY -- it's the same function as in do_fit.py,
