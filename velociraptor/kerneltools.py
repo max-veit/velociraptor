@@ -207,7 +207,8 @@ def recompute_scalar_kernels(
         compute_scalar_kernel(
                 'PS0_{:s}_atomic.npy'.format(test_name),
                 'PS0_{:s}_atomic_sparse.npy'.format(train_name),
-                zeta=zeta, kernel_name='K0_TM', workdir=workdir)
+                zeta=zeta, kernel_name=('K0_TM' + kernel_suffix),
+                workdir=workdir)
 
 
 def recompute_vector_kernels(
