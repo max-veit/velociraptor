@@ -464,9 +464,12 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_vector,
     else:
         vector_kernel_transposed = False
         vector_kernel_molecular = False
+    # Assuming geometries was truncated using the ntrain option
+    natoms_train = sum(len(geom) for geom in geoms)
+    n_vector_rows = len(geoms) if vector_kernel_molecular else natoms_train
     scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
-            geoms, scalar_kernel_full_sparse, weight_scalar,
-            vector_kernel_full_sparse, weight_vector,
+            geoms, scalar_kernel_full_sparse[:natoms_train], weight_scalar,
+            vector_kernel_full_sparse[:n_vector_rows], weight_vector,
             vector_kernel_molecular=vector_kernel_molecular,
             transpose_full_kernels=False,
             dipole_normalize=dipole_normalize, spherical=spherical)
