@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Script to compute the per-atom breakdown of a model's predictions"""
+"""Script to compute the per-atom breakdown of a model's predictions
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
+"""
 
 
 import argparse

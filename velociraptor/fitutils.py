@@ -10,6 +10,10 @@ Public functions:
     compute_residuals   Compute the test residuals for a fitted model
     compute_per_atom_properties
                         Return per-atom predictions for a fitted model
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
 """
 
 

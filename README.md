@@ -26,7 +26,7 @@ hyperparameters, and to fit and test models.  They are:
 * `do_fit.py`           for computing the weights of a fit once kernels have
                         been computed
 * `get_residuals.py`    for computing the residuals of a fit on any new dataset
-* `save_per_atom_properties.py`
+* `get_per_atom_predictions.py`
                         for decomposing the fitted model into per-atom
                         predictions (atomic charges, partial dipoles, or both)
 
@@ -62,3 +62,8 @@ or
 depending on whether you want to use the same environments for both (first case) or different environments (second case). Other useful flags are `-nc0 XXX` and `-nc1 XXX`, where in each case `XXX` is the number of features you want to keep in the L=0 or L=1 power spectrum building. *Probably vital is the flag `-ns XXX`*, which sets the number of frames you use to get the sparsification information for L=1 (for reference, on fidis I use 800). Finally, `-rc XXX` allows you to specify the radial cutoff.
 
 This will create a folder, `PS_files`, which has all of the auxiliary information we will need later on (A matrices, list of environments, power spectra), and four kernels, `K0_NM.npy`, `K0_MM.npy`, `K1_NM.npy`, `K1_MM.npy`, needed for sparse GPR.
+
+## License
+
+VELOCIRAPTOR is licensed under the GPL, version 3; see the file LICENSE for
+more details.  Copyright © 2020 Max Veit and David Wilkins.

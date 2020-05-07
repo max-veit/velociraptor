@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Script to automate the process of fitting a model"""
+"""Script to automate the process of fitting a model
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
+"""
 
 
 import argparse

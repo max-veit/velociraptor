@@ -1,4 +1,9 @@
-"""Tools to compute the linear mapping between environments and dipoles/charges"""
+"""Tools to compute the linear mapping between environments and dipoles/charges
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
+"""
 
 
 import numpy as np

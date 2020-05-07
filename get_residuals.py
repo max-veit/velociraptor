@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Script to compute the residuals of a previously-stored model"""
+"""Script to compute the residuals of a previously-stored model
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
+"""
 
 
 import argparse

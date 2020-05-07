@@ -17,6 +17,10 @@ Public functions:
     recompute_scalar_kernels Compute scalar kernels from scratch
     recompute_vector_kernels Compute vector kernels from scratch
     compute_residual         Compute the (CV-)residual given kernel params
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
 """
 
 

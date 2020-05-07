@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Compute the cross-validation error of a given model on a dataset"""
+"""Compute the cross-validation error of a given model on a dataset
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
+"""
 
 
 import argparse

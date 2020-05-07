@@ -1,4 +1,9 @@
-"""Low-level utilities for fitting and computing residuals"""
+"""Low-level utilities for fitting and computing residuals
+
+Copyright © 2020 Max Veit.
+This code is licensed under the GPL, Version 3; see the LICENSE file for
+more details.
+"""
 
 import logging
 import numpy as np
