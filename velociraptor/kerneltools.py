@@ -2,8 +2,21 @@
 
 With some utilities for automating the fitting process for use in scripts
 
-Since SOAPFAST is currently py2k-only, the interface needs to happen at
-the process level; this is not much of a problem in practice.
+Since the public release of SOAPFAST is currently py2k-only, the
+interface needs to happen at the process level; this is not much of a
+problem in practice.  However, it is planned to update to using
+librascal once it can compute vector kernels (or a newer release of
+SOAPFAST, if available earlier); both are in Python 3 and will make this
+patchy interface unnecessary.
+
+Public functions:
+    compute_power_spectra  Compute power spectra needed to build kernels
+                           (also does sparsification)
+    compute_scalar_kernel    Compute scalar kernel from power spectra
+    compute_vector_kernel    Compute vector kernel from power spectra
+    recompute_scalar_kernels Compute scalar kernels from scratch
+    recompute_vector_kernels Compute vector kernels from scratch
+    compute_residual         Compute the (CV-)residual given kernel params
 """
 
 

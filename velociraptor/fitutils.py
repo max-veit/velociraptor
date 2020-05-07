@@ -1,4 +1,16 @@
-"""High-level utilities for fitting, preparation, and post-processing"""
+"""High-level utilities for fitting, preparation, and post-processing
+
+Public functions:
+    get_charges         Extract charges from an ASE Atoms list
+    get_dipoles         Extract dipoles from an ASE Atoms list
+    transform_kernels   Transform full-sparse kernels for fitting
+    transform_sparse_kernels
+                        Transform sparse-sparse kernels for fitting
+    compute_weights     Compute the weights for a model (i.e. do a fit)
+    compute_residuals   Compute the test residuals for a fitted model
+    compute_per_atom_properties
+                        Return per-atom predictions for a fitted model
+"""
 
 
 import logging
@@ -17,13 +29,26 @@ from .transform import (transform_envts_charge_dipoles,
 logger = logging.getLogger(__name__)
 
 
-def get_charges(geometries):
-    """"Extract the property 'total_charge' from the ASE geometries
+def get_charges(geometries, prop_name='total_charge'):
+    """"Extract the total charge property from the ASE geometries
+
+    The property name is given by the 'prop_name' argument,
+    'total_charge' by default.
 
     Defaults to zero without throwing an error if the property is not
     present
     """
-    return np.array([geom.info.get('total_charge', 0.) for geom in geometries])
+    return np.array([geom.info.get(prop_name, 0.) for geom in geometries])
+
+
+def get_dipoles(geometries, prop_name='dipole'):
+    """Extract the dipoles array from the ASE geometries
+
+    The property name is given by 'prop_name', 'dipole' by default, and
+    assumed to reside in the Atoms's 'arrays' dict.  Throws a KeyError
+    if the property is missing from any one of the geometries.
+    """
+    return np.array([geom.arrays[prop_name] for geom in geometries])
 
 
 def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
