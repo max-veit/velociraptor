@@ -50,6 +50,12 @@ parser.add_argument(
             "dipoles from the geometry file instead, from the atoms.info key "
             "given by the 'dipoles' argument.")
 parser.add_argument(
+    '-sb', '--select-subset', help="Select a subset of the geometries and "
+            "dipoles in the file(s) for testing.  Give in Python slice syntax,"
+            "i.e. start:stop (no skipping steps yet).  Also note that this "
+            "option does not change the kernels for now; they need to be "
+            "pre-sliced to correspond exactly to the selected geometries.")
+parser.add_argument(
     '-ws', '--scalar-weight', type=float, metavar='weight',
             help="Weight of the scalar component (charges) in the model",
             required=True)
@@ -111,7 +117,15 @@ if __name__ == "__main__":
         raise ValueError("You don't want to print or write residuals, so "
                          "there's nothing for me to do.")
     scalar_kernel, vector_kernel = load_kernels(args)
-    geometries = ase.io.read(args.geometries, ':')
+    if args.select_subset is not None:
+        subset = args.select_subset.split(':')
+        if len(subset) < 2 or len(subset) > 3:
+            raise ValueError("--select-subset argument {:s} doesn't look like "
+                             "a proper slice".format(args.select_subset))
+        subset = slice(*((int(idx) if idx else None) for idx in subset))
+    else:
+        subset = slice(None)
+    geometries = ase.io.read(args.geometries, subset)
     natoms_list = [len(geom) for geom in geometries]
     scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
             geometries, scalar_kernel, args.scalar_weight,
@@ -131,6 +145,7 @@ if __name__ == "__main__":
             logger.warn("Dipoles file has no filename extension; assuming "
                         "plain text.")
             dipoles = np.loadtxt(args.dipoles)
+        dipoles = dipoles[subset]
     if args.dipole_normalized:
         dipoles = (dipoles.T / natoms_list).T
         charges = charges / natoms_list
