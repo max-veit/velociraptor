@@ -15,8 +15,9 @@ import os
 import ase.io
 import numpy as np
 
+from velociraptor import fitutils
 from velociraptor.fitutils import (transform_kernels, transform_sparse_kernels,
-                                   compute_weights, compute_residuals, get_charges)
+                                   compute_weights, compute_residuals)
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,10 @@ parser.add_argument(
             "name of a file readable by ASE.")
 parser.add_argument(
     'dipoles', help="Dipoles, in Cartesian coordinates, per geometry.  "
-            "Entries must be in the same order as the geometry file.")
+            "Entries must be in the same order as the geometry file.  "
+            "Alternatively, with -dg, read them from the geometry file itself,"
+            " in which case this argument is the name of the key in the "
+            "atoms.info dict where the dipole is stored.")
 parser.add_argument(
     'scalar_kernel_sparse', help="Filename for the sparse-sparse (MM) scalar "
             "kernel, in atomic environment space")
@@ -51,6 +55,10 @@ parser.add_argument(
 parser.add_argument(
     'weights_output', help="Name of a file into which to write the "
             "output weights")
+parser.add_argument(
+    '-dg', '--dipoles-in-geomfile', action='store_true', help="Read the "
+            "dipoles from the geometry file instead, from the atoms.info key "
+            "given by the 'dipoles' argument.")
 parser.add_argument(
     '-ws', '--scalar-weight', type=float, metavar='weight',
             help="Weight of the scalar component (charges) in the model",
@@ -170,16 +178,19 @@ def prepare_data(args):
     else:
         geometries = ase.io.read(args.geometries, slice(None))
         n_train = len(geometries)
-    charges = get_charges(geometries)
-    dipole_fext = os.path.splitext(args.dipoles)[1]
-    if dipole_fext == '.npy':
-        dipoles = np.load(args.dipoles)[:n_train]
-    elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
-        dipoles = np.loadtxt(args.dipoles)[:n_train]
+    charges = fitutils.get_charges(geometries)
+    if args.dipole_in_geomfile:
+        dipoles = fitutils.get_dipoles(geometries, args.dipoles)
     else:
-        logger.warn("Dipoles file has no filename extension; assuming "
-                    "plain text.")
-        dipoles = np.loadtxt(args.dipoles)[:n_train]
+        dipole_fext = os.path.splitext(args.dipoles)[1]
+        if dipole_fext == '.npy':
+            dipoles = np.load(args.dipoles)[:n_train]
+        elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
+            dipoles = np.loadtxt(args.dipoles)[:n_train]
+        else:
+            logger.warn("Dipoles file has no filename extension; assuming "
+                        "plain text.")
+            dipoles = np.loadtxt(args.dipoles)[:n_train]
     del args.dipoles
     natoms_list = [len(geom) for geom in geometries]
     if args.dipole_normalize:

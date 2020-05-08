@@ -16,7 +16,8 @@ import ase.io
 import numpy as np
 from scipy import optimize
 
-from velociraptor.fitutils import get_charges
+from velociraptor import fitutils
+from velociraptor.fitutils import get_charges, get_dipoles
 from velociraptor.kerneltools import make_kernel_params
 from velociraptor.kerneltools import compute_residual as kt_residual
 
@@ -34,9 +35,18 @@ parser.add_argument(
             "name of a file readable by ASE.")
 parser.add_argument(
     'dipoles', help="Dipoles, in Cartesian coordinates, per geometry.  "
-            "Entries must be in the same order as the geometry file.")
+            "Entries must be in the same order as the geometry file.  "
+            "Alternatively, with -dg, read them from the geometry file itself,"
+            " in which case this argument is the name of the key in the "
+            "atoms.info dict where the dipole is stored.")
+parser.add_argument(
+    '-dg', '--dipoles-in-geomfile', action='store_true', help="Read the "
+            "dipoles from the geometry file instead, from the atoms.info key "
+            "given by the 'dipoles' argument.")
 # Kernel parameters
 #TODO package these into their own sub-parser?
+#     Really, reorganizing this whole script into subcommands would be
+#     much cleaner (e.g. compute_kernels, optimize, ...)
 parser.add_argument(
     '-n', '--max-radial', type=int, metavar='N', help="Number of radial "
             "channels for the SOAP kernel", default=8)
@@ -336,11 +346,15 @@ if __name__ == "__main__":
         geometries = ase.io.read(geom_filename, slice(None))
         n_train = len(geometries)
     charges = get_charges(geometries)
-    if not os.path.dirname(args.dipoles):
-        dipole_filename = os.path.join(args.working_directory, args.dipoles)
+    if args.dipoles_in_geomfile:
+        dipoles = get_dipoles(geometries, args.dipoles)
     else:
-        dipole_filename = args.dipoles
-    dipoles = load_detect_matrix(dipole_filename)[:n_train]
+        if not os.path.dirname(args.dipoles):
+            dipole_filename = os.path.join(
+                    args.working_directory, args.dipoles)
+        else:
+            dipole_filename = args.dipoles
+        dipoles = load_detect_matrix(dipole_filename)[:n_train]
     natoms_list = [len(geom) for geom in geometries]
     dipole_normalize = True # seems to be the best option
     if args.cv_file is not None:

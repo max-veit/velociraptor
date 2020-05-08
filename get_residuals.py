@@ -14,8 +14,8 @@ import os
 import ase.io
 import numpy as np
 
-from velociraptor.fitutils import (transform_kernels, compute_residuals,
-                                   get_charges)
+from velociraptor import fitutils
+from velociraptor.fitutils import transform_kernels, compute_residuals,
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,10 @@ parser.add_argument(
 parser.add_argument(
     'dipoles', help="Dipoles of the test set, in Cartesian coordinates, per "
             "geometry.  Entries must be in the same order as the "
-            "geometry file.")
+            "geometry file."
+            "Alternatively, with -dg, read them from the geometry file itself,"
+            " in which case this argument is the name of the key in the "
+            "atoms.info dict where the dipole is stored.")
 parser.add_argument(
     'weights', help="Filename where the model weights are stored")
 parser.add_argument(
@@ -42,6 +45,10 @@ parser.add_argument(
 parser.add_argument(
     'vector_kernel', help="Filename for the full-sparse vector kernel, "
             "mapping Cartesian components to environments")
+parser.add_argument(
+    '-dg', '--dipoles-in-geomfile', action='store_true', help="Read the "
+            "dipoles from the geometry file instead, from the atoms.info key "
+            "given by the 'dipoles' argument.")
 parser.add_argument(
     '-ws', '--scalar-weight', type=float, metavar='weight',
             help="Weight of the scalar component (charges) in the model",
@@ -73,11 +80,6 @@ parser.add_argument(
             "the full-sparse kernels, assuming they were stored in the "
             "opposite order (MN) from the one expected (NM) (where N is full "
             "and M is sparse)")
-parser.add_argument(
-    '-tvk', '--transpose-vector-kernels', action='store_true', help="Same as "
-            "-tk, but only for the (full) vector kernels.  This is a "
-            "transitional option to patch up different conventions; don't "
-            "expect it to stick around.")
 parser.add_argument(
     '-tm', '--vector-kernel-molecular', action='store_true', help="Is the full"
             " vector kernel stored in molecular, rather than atomic, format? "
@@ -116,16 +118,19 @@ if __name__ == "__main__":
             vector_kernel, args.vector_weight, args.vector_kernel_molecular,
             args.transpose_full_kernels,
             args.dipole_normalized, args.spherical)
-    charges = get_charges(geometries)
-    dipole_fext = os.path.splitext(args.dipoles)[1]
-    if dipole_fext == '.npy':
-        dipoles = np.load(args.dipoles)
-    elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
-        dipoles = np.loadtxt(args.dipoles)
+    charges = fitutils.get_charges(geometries)
+    if args.dipoles_in_geomfile:
+        dipoles = fitutils.get_dipoles(geometries, args.dipoles)
     else:
-        logger.warn("Dipoles file has no filename extension; assuming "
-                    "plain text.")
-        dipoles = np.loadtxt(args.dipoles)
+        dipole_fext = os.path.splitext(args.dipoles)[1]
+        if dipole_fext == '.npy':
+            dipoles = np.load(args.dipoles)
+        elif (dipole_fext == '.txt') or (dipole_fext == '.dat'):
+            dipoles = np.loadtxt(args.dipoles)
+        else:
+            logger.warn("Dipoles file has no filename extension; assuming "
+                        "plain text.")
+            dipoles = np.loadtxt(args.dipoles)
     if args.dipole_normalized:
         dipoles = (dipoles.T / natoms_list).T
         charges = charges / natoms_list

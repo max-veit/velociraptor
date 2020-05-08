@@ -49,10 +49,10 @@ def get_dipoles(geometries, prop_name='dipole'):
     """Extract the dipoles array from the ASE geometries
 
     The property name is given by 'prop_name', 'dipole' by default, and
-    assumed to reside in the Atoms's 'arrays' dict.  Throws a KeyError
+    assumed to reside in the Atoms's 'info' dict.  Throws a KeyError
     if the property is missing from any one of the geometries.
     """
-    return np.array([geom.arrays[prop_name] for geom in geometries])
+    return np.array([geom.info[prop_name] for geom in geometries])
 
 
 def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
