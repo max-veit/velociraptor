@@ -15,7 +15,7 @@ import ase.io
 import numpy as np
 
 from velociraptor import fitutils
-from velociraptor.fitutils import transform_kernels, compute_residuals,
+from velociraptor.fitutils import transform_kernels, compute_residuals
 
 
 logger = logging.getLogger(__name__)
@@ -52,9 +52,7 @@ parser.add_argument(
 parser.add_argument(
     '-sb', '--select-subset', help="Select a subset of the geometries and "
             "dipoles in the file(s) for testing.  Give in Python slice syntax,"
-            "i.e. start:stop (no skipping steps yet).  Also note that this "
-            "option does not change the kernels for now; they need to be "
-            "pre-sliced to correspond exactly to the selected geometries.")
+            "i.e. start:stop (no skipping steps yet).")
 parser.add_argument(
     '-ws', '--scalar-weight', type=float, metavar='weight',
             help="Weight of the scalar component (charges) in the model",
@@ -125,13 +123,28 @@ if __name__ == "__main__":
         subset = slice(*((int(idx) if idx else None) for idx in subset))
     else:
         subset = slice(None)
-    geometries = ase.io.read(args.geometries, subset)
+    # Would be nice, but we need the whole atoms list to be able to interpret
+    # the per-atom kernels properly
+    # Though technically we just need the number of atoms per geometry...
+    #geometries = ase.io.read(args.geometries, subset)
+    geometries = ase.io.read(args.geometries, slice(None))
     natoms_list = [len(geom) for geom in geometries]
     scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
             geometries, scalar_kernel, args.scalar_weight,
             vector_kernel, args.vector_weight, args.vector_kernel_molecular,
             args.transpose_full_kernels,
             args.dipole_normalized, args.spherical)
+    if args.select_subset is not None:
+        geometries = geometries[subset]
+        natoms_list = natoms_list[subset]
+        if args.scalar_weight != 0:
+            n_sparse = scalar_kernel_transformed.shape[1]
+            scalar_kernel_transformed = scalar_kernel_transformed.reshape(
+                    (-1, 4, n_sparse))[subset].reshape((-1, n_sparse))
+        if args.vector_weight != 0:
+            n_sparse = vector_kernel_transformed.shape[1]
+            vector_kernel_transformed = vector_kernel_transformed.reshape(
+                    (-1, 4, n_sparse))[subset].reshape((-1, n_sparse))
     charges = fitutils.get_charges(geometries)
     if args.dipoles_in_geomfile:
         dipoles = fitutils.get_dipoles(geometries, args.dipoles)

@@ -179,7 +179,7 @@ def prepare_data(args):
         geometries = ase.io.read(args.geometries, slice(None))
         n_train = len(geometries)
     charges = fitutils.get_charges(geometries)
-    if args.dipole_in_geomfile:
+    if args.dipoles_in_geomfile:
         dipoles = fitutils.get_dipoles(geometries, args.dipoles)
     else:
         dipole_fext = os.path.splitext(args.dipoles)[1]

@@ -106,7 +106,6 @@ def transform_kernels(geometries, scalar_kernel_full_sparse, scalar_weight,
         scalar_kernel_transformed *= scalar_weight
     else:
         scalar_kernel_transformed = scalar_kernel_full_sparse
-    # Assuming the spherical-to-Cartesian transformation was done elsewhere
     if vector_weight != 0:
         if vector_kernel_molecular:
             vector_kernel_transformed = transform_vector_mols_charge_dipoles(
