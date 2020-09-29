@@ -50,7 +50,8 @@ NCPUS = int(os.environ.get('SLURM_CPUS_PER_TASK', 8))
 def compute_power_spectra(
         n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS', lambda_=0,
         atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
-        n_sparse_components=500, feat_sparsefile=None, species_list=None):
+        n_sparse_components=500, feat_sparsefile=None, species_list=None,
+        periodic=False):
     if species_list is None:
         species_list = 'H C N O S Cl'.split()
     # These PS parameters are unlikely to change
@@ -73,6 +74,8 @@ def compute_power_spectra(
         '-rs', str(rad_c), str(rad_r0), str(rad_m),
         '-o', ps_prefix
     ])
+    if periodic:
+        ps_args.append('-p')
     if feat_sparsefile is not None:
         ps_args.extend(['-sf', feat_sparsefile])
         ps_sparse_prefix = ps_prefix
@@ -112,11 +115,13 @@ def compute_power_spectra(
 def compute_scalar_power_spectra(
         n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS0',
         atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
-        n_sparse_components=500, feat_sparsefile=None, species_list=None):
+        n_sparse_components=500, feat_sparsefile=None, species_list=None,
+        periodic=False):
     lambda_ = 0
     compute_power_spectra(n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix,
                           lambda_, atoms_file, workdir, n_sparse_envs,
-                          n_sparse_components, feat_sparsefile, species_list)
+                          n_sparse_components, feat_sparsefile, species_list,
+                          periodic)
 
 
 def compute_scalar_kernel(ps_name, ps_second_name=None, kernel_name='K0_MM',
@@ -189,7 +194,7 @@ def recompute_scalar_kernels(
         atoms_filename_train='qm7_train.xyz', atoms_filename_test=None,
         n_sparse_envs=2000, n_sparse_components=500, workdir=None,
         test_name='test', train_name='train',
-        kernel_suffix='', species_list=None):
+        kernel_suffix='', species_list=None, periodic=False):
     if kernel_suffix:
         kernel_suffix = '_{:s}'.format(kernel_suffix)
     # number of sparse envs is another convergence parameter
@@ -198,7 +203,8 @@ def recompute_scalar_kernels(
             ps_prefix='PS0_{:s}'.format(train_name),
             atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
-            n_sparse_components=n_sparse_components, species_list=species_list)
+            n_sparse_components=n_sparse_components, species_list=species_list,
+            periodic=periodic)
     # Make sure feat sparsification uses the PS0_train values!
     # (and don't sparsify on envs)
     if atoms_filename_test is not None:
@@ -207,7 +213,8 @@ def recompute_scalar_kernels(
                 ps_prefix='PS0_{:s}'.format(test_name),
                 atoms_file=atoms_filename_test, workdir=workdir,
                 feat_sparsefile='PS0_{:s}'.format(train_name),
-                n_sparse_envs=-1, species_list=species_list)
+                n_sparse_envs=-1, species_list=species_list,
+                periodic=periodic)
     # compute kernels (soapfast)
     zeta = 2 # possibly another parameter to gridsearch
     # sparse-sparse
@@ -233,7 +240,7 @@ def recompute_vector_kernels(
         atoms_filename_train='qm7_train.xyz', atoms_filename_test=None,
         n_sparse_envs=2000, n_sparse_components=500, workdir=None,
         test_name='test', train_name='train', kernel_suffix='',
-        species_list=None):
+        species_list=None, periodic=False):
     if kernel_suffix:
         kernel_suffix = '_{:s}'.format(kernel_suffix)
     compute_power_spectra(
@@ -241,7 +248,8 @@ def recompute_vector_kernels(
             ps_prefix='PS1_{:s}'.format(train_name),
             atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
-            n_sparse_components=n_sparse_components, species_list=species_list)
+            n_sparse_components=n_sparse_components, species_list=species_list,
+            periodic=periodic)
     # Scalar power spectra are also needed for nonlinear vector kernels
     # Different name than for scalar kernels because the optimal
     # parameters for the two kernels will usually be different
@@ -250,7 +258,8 @@ def recompute_vector_kernels(
             ps_prefix='PS0v_{:s}'.format(train_name),
             atoms_file=atoms_filename_train, workdir=workdir,
             n_sparse_envs=n_sparse_envs,
-            n_sparse_components=n_sparse_components, species_list=species_list)
+            n_sparse_components=n_sparse_components, species_list=species_list,
+            periodic=periodic)
     # Make sure feat sparsification for test uses the train values!
     # (and don't sparsify on envs)
     if atoms_filename_test is not None:
@@ -259,13 +268,15 @@ def recompute_vector_kernels(
                 ps_prefix='PS1_{:s}'.format(test_name),
                 atoms_file=atoms_filename_test, workdir=workdir,
                 feat_sparsefile='PS1_{:s}'.format(train_name),
-                n_sparse_envs=-1, species_list=species_list)
+                n_sparse_envs=-1, species_list=species_list,
+                periodic=periodic)
         compute_power_spectra(
                 n_max, l_max, atom_width, rad_r0, rad_m, lambda_=0,
                 ps_prefix='PS0v_{:s}'.format(test_name),
                 atoms_file=atoms_filename_test, workdir=workdir,
                 feat_sparsefile='PS0v_{:s}'.format(train_name),
-                n_sparse_envs=-1, species_list=species_list)
+                n_sparse_envs=-1, species_list=species_list,
+                periodic=periodic)
     # compute kernels (soapfast)
     zeta = 2 # possibly another parameter to gridsearch
     # sparse-sparse
@@ -370,7 +381,7 @@ def do_cv_split(scalar_kernel_transformed, vector_kernel_transformed,
 def infer_kernel_convention(kernel_shape, n_mol, n_atoms):
     # defaults
     transposed = False
-    molecular = False
+    molecular = True
     if kernel_shape[0] == n_mol:
         LOGGER.info("Assuming kernel is molecular and not transposed.")
         molecular = True
@@ -483,6 +494,8 @@ def load_transform_kernels(workdir, geoms, weight_scalar, weight_vector,
         vector_kernel_molecular = False
     # Assuming geometries was truncated using the ntrain option
     natoms_train = sum(len(geom) for geom in geoms)
+    # Warning dependency loop! It would really be better to explicitly
+    # specify the kernel convention
     n_vector_rows = len(geoms) if vector_kernel_molecular else natoms_train
     scalar_kernel_transformed, vector_kernel_transformed = transform_kernels(
             geoms, scalar_kernel_full_sparse[:natoms_train], weight_scalar,
