@@ -51,12 +51,11 @@ def compute_power_spectra(
         n_max, l_max, atom_width, rad_r0, rad_m, ps_prefix='PS', lambda_=0,
         atoms_file='qm7.xyz', workdir=None, n_sparse_envs=2000,
         n_sparse_components=500, feat_sparsefile=None, species_list=None,
-        periodic=False):
+        periodic=False, r_cut=5.0):
     if species_list is None:
         species_list = 'H C N O S Cl'.split()
-    # These PS parameters are unlikely to change
+    # We don't ever use a different 'c' constant in radial scaling
     rad_c = 1
-    r_cut = 5.0
     if not os.path.dirname(atoms_file):
         atoms_file_rel = atoms_file
         atoms_file = os.path.join(workdir, atoms_file)
