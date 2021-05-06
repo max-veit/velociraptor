@@ -30,6 +30,7 @@ import ase.io
 import numpy as np
 
 from rascal.representations import SphericalInvariants, SphericalCovariants
+from rascal.representations.spherical_invariants import get_power_spectrum_index_mapping
 from rascal.models import Kernel
 
 #  from ..fitutils import (transform_kernels, transform_sparse_kernels,
@@ -73,21 +74,39 @@ def _get_soapfast_to_librascal_idx_mapping(n_max, l_max, n_species, lambda_=0):
 
 def compute_power_spectra(
         geometries, n_max, l_max, atom_width, r_cut, r_cut_width, rad_r0, rad_m,
-        lambda_=0, n_sparse_envs=None, n_sparse_components=None, feat_sparsefile=None):
+        lambda_=0, n_sparse_envs=None, n_sparse_components=None, feat_sparsefile=None,
+        Amat_file=None, species_list=None):
     """Compute invariant or covariant power spectra using librascal
 
     The arguments correspond to hyperparameters of the SOAP descriptor
-    documented in rascal.representations.Spherical[In,Co]variants, and
+    documented in rascal.representations.Spherical(In|Co)variants, and
     are summarized below. (TODO)
 
     Parameters
     ----------
 
-        geometries: list(ase.Atoms)
-            Atomic configurations to compute the descriptors for
+    geometries: list(ase.Atoms)
+        Atomic configurations to compute the descriptors for
 
-    Return a librascal AtomsList that can provide the power spectra as one
-    large array, or one array per species-pair block.
+    feat_sparsefile: filename
+        Name of a feature sparsification file written by SOAPFAST
+        or TENSOAP (usually ending in `_fps.npy`)
+
+    Amat_file: filename
+        Name of the feature rescaling file also written out by SOAPFAST
+        or TENSOAP (if not given, will try to derive from 'feat_sparsefile')
+
+    species_list: list(int)
+        List of species considered (only used when reading feature
+        sparsification files)
+
+    Returns
+    -------
+    features: np.ndarray
+        Feature matrix, size NxD, where N is the number of atoms
+        (environments) and D is the feature dimension If using feature
+        sparsification, the features are reweighted (using the "A-matrix")
+        before being returned.
     """
     #TODO spline optimization?
     hypers = {
@@ -109,8 +128,36 @@ def compute_power_spectra(
     else:
         Rep = SphericalCovariants
         hypers["covariant_lambda"] = lambda_
+    if (n_sparse_components is not None) or (n_sparse_envs is not None):
+        raise ValueError("Feature sparsification with librascal is not yet implemented."
+                         "Please use a pre-generated sparse file instead.")
+    if feat_sparsefile is not None:
+        if not species_list:
+            species_list = np.unique(geometries[0].get_atomic_numbers())
+        species_pairs = [(species_list[i], species_list[j]) for i in range(len(species_list)) for j in range(i, len(species_list))]
+        sparse_idces = np.load(feat_sparsefile)
+        # Feature sparsification is directly implemented in SphericalInvariants
+        #TODO use global_species in librascal so that the species list doesn't change?
+        if lambda_=0:
+            idx_mapping = _get_soapfast_to_librascal_idx_mapping(n_max, l_max, len(species_list))
+            sparse_idces_rascal = idx_mapping[sparse_idces]
+            rascal_index_mapping = get_power_spectrum_index_mapping(species_pairs, n_max, l_max)
+            rascal_spinv_select_idces = [rascal_index_mapping[idx] for idx in sparse_idces_rascal]
+            hypers['coefficient_subselection'] = rascal_spinv_select_idces
+        else:
+            # I would just get the features and manually pick out the columns
+            raise ValueError("Feature sparsification not yet implemented for lambda != 0")
     calculator = Rep(**hypers)
-    return calculator.transform(geometries)
+    soaps = calculator.transform(geometries)
+    results = soaps.get_features()
+    if feat_sparsefile is not None:
+        amat_file = feat_sparsefile.replace('fps', 'Amat')
+        if amat_file == feat_sparsefile:
+            raise ValueError("Must provide name of A-matrix file (could not "
+                             "derive from feature sparsification file)")
+        Amat = np.load(amat_file)
+        results = results @ Amat
+    return results
 
 
 def compute_scalar_kernel(ps, ps_other=None, zeta=2):
