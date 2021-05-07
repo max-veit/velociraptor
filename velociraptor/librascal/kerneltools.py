@@ -4,13 +4,11 @@ In contrast to the older SOAPFAST interface, these functions are designed to
 compute and use power spectra in memory without incurring the overhead of
 reading from and writing to disk.
 
-Public functions (to be implemented):
+Public functions:
     compute_power_spectra  Compute power spectra needed to build kernels
-                           (also does sparsification)
+                           (also applies pre-computed sparsification)
     compute_scalar_kernel    Compute scalar kernel from power spectra
     compute_vector_kernel    Compute vector kernel from power spectra
-    recompute_scalar_kernels Compute scalar kernels from scratch
-    recompute_vector_kernels Compute vector kernels from scratch
     get_predictions          Get predictions for a new structure, from scratch
 May be implemented in the future:
     compute_residual         Compute the (CV-)residual given kernel params
@@ -33,8 +31,7 @@ from rascal.representations import SphericalInvariants, SphericalCovariants
 from rascal.representations.spherical_invariants import get_power_spectrum_index_mapping
 from rascal.models import Kernel
 
-#  from ..fitutils import (transform_kernels, transform_sparse_kernels,
-                        #  compute_weights, compute_residuals, get_charges)
+from ..fitutils import transform_kernels, compute_residuals
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,20 +70,25 @@ def _get_soapfast_to_librascal_idx_mapping(n_max, l_max, n_species, lambda_=0):
 
 
 def compute_power_spectra(
-        geometries, n_max, l_max, atom_width, r_cut, r_cut_width, rad_r0, rad_m,
-        lambda_=0, n_sparse_envs=None, n_sparse_components=None, feat_sparsefile=None,
-        Amat_file=None, species_list=None):
+        geometries, soap_hypers,
+        lambda_=0, n_sparse_envs=None, n_sparse_components=None,
+        feat_sparsefile=None, Amat_file=None, species_list=None):
     """Compute invariant or covariant power spectra using librascal
 
-    The arguments correspond to hyperparameters of the SOAP descriptor
-    documented in rascal.representations.Spherical(In|Co)variants, and
-    are summarized below. (TODO)
+    The SOAP hyperparameters are passed as arguments to the
+    rascal.representations.Spherical(In|Co)variants constructors.
+    The remaining parameters are summarized below.
 
     Parameters
     ----------
 
     geometries: list(ase.Atoms)
         Atomic configurations to compute the descriptors for
+
+    lambda_: int
+        Spherical tensor order for the power spectra.  Lambda=0 computes
+        scalar SOAP, any other value computes spherical covariants of
+        that order.
 
     feat_sparsefile: filename
         Name of a feature sparsification file written by SOAPFAST
@@ -97,8 +99,12 @@ def compute_power_spectra(
         or TENSOAP (if not given, will try to derive from 'feat_sparsefile')
 
     species_list: list(int)
-        List of species considered (only used when reading feature
-        sparsification files)
+        List of atomic numbers for species considered by SOAPFAST
+        (only used when reading feature sparsification files)
+        Warning: librascal only works with sorted species lists,
+        so if the SOAPFAST feature sparsification files were made
+        with unsorted species lists, they should be transformed
+        or remade.
 
     Returns
     -------
@@ -108,21 +114,6 @@ def compute_power_spectra(
         sparsification, the features are reweighted (using the "A-matrix")
         before being returned.
     """
-    #TODO spline optimization?
-    hypers = {
-            "max_radial": n_max,
-            "max_angular": l_max,
-            "gaussian_sigma_constant": atom_width,
-            "gaussian_sigma_type": "Constant",
-            "interaction_cutoff": r_cut,
-            "cutoff_smooth_width": r_cut_width,
-            "cutoff_function_type": "RadialScaling",
-            "cutoff_function_parameters": {
-                "rate": 1.0,
-                "scale": rad_r0,
-                "exponent": rad_m
-            }
-    }
     if lambda_ == 0:
         Rep = SphericalInvariants
     else:
@@ -136,6 +127,8 @@ def compute_power_spectra(
             species_list = np.unique(geometries[0].get_atomic_numbers())
         species_pairs = [(species_list[i], species_list[j]) for i in range(len(species_list)) for j in range(i, len(species_list))]
         sparse_idces = np.load(feat_sparsefile)
+        n_max = hypers['max_radial']
+        l_max = hypers['max_angular']
         # Feature sparsification is directly implemented in SphericalInvariants
         #TODO use global_species in librascal so that the species list doesn't change?
         if lambda_=0:
@@ -160,22 +153,48 @@ def compute_power_spectra(
     return results
 
 
+def apply_environment_sparsification(ps, env_sparse_file):
+    """Apply a pre-computed environment sparsification selection"""
+    pass
+
+
 def compute_scalar_kernel(ps, ps_other=None, zeta=2):
     """Compute the scalar (lambda=0) kernel using two power spectra"""
-    pass
+    if ps_other is None:
+        return (ps @ ps.T)**zeta
+    else:
+        return (ps @ ps_other.T)**zeta
 
 
 def compute_vector_kernel(ps, ps_other=None, ps0=None, ps0_other=None):
     """Compute the vector (lambda=1) kernel from power spectra
+
+    Vector PS shape is assumed to be (N_samp, 3, dim), where 'dim'
+    is the descriptor dimension
 
     If zeta is greater than 1, then must also provide scalar power
     spectra to compute covariant polynomial kernel
     """
     if (zeta != 1.0) and (ps0 is None):
         raise ValueError("Must provide a scalar power spectrum for zeta != 1")
-    raise RuntimeError("Not yet implemented")
+    kernel_covariant
+    if ps_other is None:
+        ps_other = ps
+        ps0_other = ps0
+    # This sums over the descriptor dimension, while keeping the sample and
+    # spherical component dimensions.  The resulting matrix is rearranged to
+    # "SOAPFAST order", keeping the first two sample dimensions first, then
+    # the spherical component dimensions second, in the same order as the
+    # sample dimensions.
+    #TODO doesn't the second PS need to be "complex conjugated"?
+    kernel_covariant = np.tensordot(ps, ps_other.T, axes=1).transpose((0, 3, 1, 2))
+    if zeta != 1.0:
+        kernel_scalar = (ps0 @ ps0_other.T)**(zeta - 1.0)
+        # Covariant kernel shape is (N1, N2, 
+        kernel_covariant *= kernel_scalar[:, :, np.newaxis, np.newaxis]
+    return kernel_covariant
 
 
-def get_predictions(geom, hypers, sparsepoints, weights):
-    """Get predictions for a new structure with the given model"""
+def get_predictions(geom, hypers, weights, PS_sparse_file):
+    """Get predictions for new structures with the given model"""
     pass
