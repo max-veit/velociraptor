@@ -9,7 +9,7 @@ Public functions:
                            (also applies pre-computed sparsification)
     compute_scalar_kernel    Compute scalar kernel from power spectra
     compute_vector_kernel    Compute vector kernel from power spectra
-    get_predictions          Get predictions for a new structure, from scratch
+    get_test_kernel          Get kernel for new structures, from scratch
 May be implemented in the future:
     compute_residual         Compute the (CV-)residual given kernel params
 
@@ -19,6 +19,8 @@ more details.
 """
 
 
+from collections import defaultdict
+import itertools
 import logging
 from math import sqrt
 import os
@@ -166,7 +168,7 @@ def compute_scalar_kernel(ps, ps_other=None, zeta=2):
         return (ps @ ps_other.T)**zeta
 
 
-def compute_vector_kernel(ps, ps_other=None, ps0=None, ps0_other=None):
+def compute_vector_kernel(ps, ps_other=None, ps0=None, ps0_other=None, zeta=2):
     """Compute the vector (lambda=1) kernel from power spectra
 
     Vector PS shape is assumed to be (N_samp, 3, dim), where 'dim'
@@ -195,6 +197,65 @@ def compute_vector_kernel(ps, ps_other=None, ps0=None, ps0_other=None):
     return kernel_covariant
 
 
-def get_predictions(geom, hypers, weights, PS_sparse_file):
-    """Get predictions for new structures with the given model"""
-    pass
+def get_test_kernel(geometries, lambda_orders, hypers, kernel_zeta,
+                    PS_sparse,
+                    feat_sparsefile=None, Amat_file=None):
+    """Get kernel for new structures with the given model
+
+    Parameters
+    ----------
+
+    geometries: list(ase.Atoms)
+        Atomic configurations to get kernel for
+
+    lambda_orders: list(int)
+        Spherical tensor orders needed for the power spectra.  For a pure scalar
+        kernel this is just 0, for a vector kernel generally it's [0, 1].
+
+    hypers: list(dict)
+        Dictionary of SOAP hyperparameters, one for each entry of lambda_orders
+
+    kernel_zeta: int
+        Power to raise the SOAP kernel to
+
+    PS_sparse: list(2-D array)
+        Power spectra for the model's "sparse" or "basis" points
+        (shape N_sparse (x N_comp) x N_descriptor), one PS for each entry
+        of lambda_orders)
+        The first dimension of each PS must be equal
+
+    feat_sparsefile: list(filename), optional
+        Name of a feature sparsification file written by SOAPFAST
+        or TENSOAP (usually ending in `_fps.npy`)
+        One for each entry of lambda_orders
+
+    Amat_file: list(filename), optional
+        Name of the feature rescaling file also written out by SOAPFAST
+        or TENSOAP (if not given, will try to derive from 'feat_sparsefile')
+        One for each entry of lambda_orders
+    """
+    if feat_sparsefile is None:
+        feat_sparsefile = itertools.repeat(None)
+    if Amat_file is None:
+        Amat_file = itertools.repeat(None)
+    PS_test = []
+    for lambda_, lhypers, lf_sparsefile, lAmat_file in zip(
+            lambda_orders, hypers, feat_sparsefile, Amat_file):
+        PS_test.append(compute_power_spectra(
+                geometries, lhypers, lambda_, lf_sparsefile, lAmat_file))
+    if 1 in lambda_orders:
+        # Vector kernel
+        # Ensure we use power spectra corresponding to the correct lambda order
+        # Also allows omitting lambda=0 PS if zeta==1
+        PS_sparse_lambda = defaultdict(lambda: None)
+        PS_test_lambda = defaultdict(lambda: None)
+        for lambda_, lPS_sparse, lPS_test in zip(lambda_orders, PS_sparse, PS_test):
+            PS_sparse_lambda[lambda_] = lPS_sparse
+            PS_test_lambda[lambda_] = lPS_test
+        return compute_vector_kernel(PS_sparse_lambda[1], PS_test_lambda[1],
+                                     PS_sparse_lambda[0], PS_test_lambda[0],
+                                     kernel_zeta)
+    else:
+        if (lambda_orders[0] != 0) or (len(lambda_orders) > 1):
+            raise ValueError("Use only lambda_orders=[0,] to compute scalar kernel")
+        return compute_scalar_kernel(PS_sparse[0], PS_test[0], kernel_zeta)
