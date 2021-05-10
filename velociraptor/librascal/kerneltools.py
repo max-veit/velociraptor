@@ -74,33 +74,37 @@ def _get_soapfast_to_librascal_idx_mapping(n_max, l_max, n_species, lambda_=0):
 def compute_power_spectra(
         geometries, soap_hypers,
         lambda_=0, n_sparse_envs=None, n_sparse_components=None,
-        feat_sparsefile=None, Amat_file=None, species_list=None):
+        sparse_feat_idces=None, Amat=None, species_list=None):
     """Compute invariant or covariant power spectra using librascal
 
-    The SOAP hyperparameters are passed as arguments to the
-    rascal.representations.Spherical(In|Co)variants constructors.
-    The remaining parameters are summarized below.
 
     Parameters
     ----------
 
-    geometries: list(ase.Atoms)
+    geometries : list(ase.Atoms)
         Atomic configurations to compute the descriptors for
 
-    lambda_: int
+    soap_hypers : dict
+        The SOAP hyperparameters, passed as (keyword) arguments to the
+        rascal.representations.Spherical(In|Co)variants constructor.
+
+    lambda_ : int
         Spherical tensor order for the power spectra.  Lambda=0 computes
         scalar SOAP, any other value computes spherical covariants of
         that order.
 
-    feat_sparsefile: filename
-        Name of a feature sparsification file written by SOAPFAST
-        or TENSOAP (usually ending in `_fps.npy`)
+    sparse_feat_idces : 1-D array, optional
+        Indices of "sparse" features to select, in the format of the feature
+        sparsification file written by SOAPFAST or TENSOAP
+        (usually ending in `_fps.npy`).  This means it uses SOAPFAST
+        indexing, i.e. with redundant species pairs.
 
-    Amat_file: filename
-        Name of the feature rescaling file also written out by SOAPFAST
-        or TENSOAP (if not given, will try to derive from 'feat_sparsefile')
+    Amat : 2-D array, optional
+        Feature rescaling matrix also written out by SOAPFAST
+        or TENSOAP (if not given, will default to the identity matrix)
+        Must be size DxD, where D is the feature dimension.
 
-    species_list: list(int)
+    species_list : list(int), optional
         List of atomic numbers for species considered by SOAPFAST
         (only used when reading feature sparsification files)
         Warning: librascal only works with sorted species lists,
@@ -110,10 +114,10 @@ def compute_power_spectra(
 
     Returns
     -------
-    features: np.ndarray
+    features : np.ndarray
         Feature matrix, size NxD, where N is the number of atoms
-        (environments) and D is the feature dimension If using feature
-        sparsification, the features are reweighted (using the "A-matrix")
+        (environments) and D is the feature dimension. If using feature
+        sparsification, the features are reweighted (using the 'Amat' matrix)
         before being returned.
     """
     if lambda_ == 0:
@@ -124,18 +128,17 @@ def compute_power_spectra(
     if (n_sparse_components is not None) or (n_sparse_envs is not None):
         raise ValueError("Feature sparsification with librascal is not yet implemented."
                          "Please use a pre-generated sparse file instead.")
-    if feat_sparsefile is not None:
+    if sparse_feat_idces is not None:
         if not species_list:
             species_list = np.unique(geometries[0].get_atomic_numbers())
         species_pairs = [(species_list[i], species_list[j]) for i in range(len(species_list)) for j in range(i, len(species_list))]
-        sparse_idces = np.load(feat_sparsefile)
         n_max = hypers['max_radial']
         l_max = hypers['max_angular']
         # Feature sparsification is directly implemented in SphericalInvariants
         #TODO use global_species in librascal so that the species list doesn't change?
         if lambda_=0:
             idx_mapping = _get_soapfast_to_librascal_idx_mapping(n_max, l_max, len(species_list))
-            sparse_idces_rascal = idx_mapping[sparse_idces]
+            sparse_idces_rascal = idx_mapping[sparse_feat_idces]
             rascal_index_mapping = get_power_spectrum_index_mapping(species_pairs, n_max, l_max)
             rascal_spinv_select_idces = [rascal_index_mapping[idx] for idx in sparse_idces_rascal]
             hypers['coefficient_subselection'] = rascal_spinv_select_idces
@@ -145,13 +148,20 @@ def compute_power_spectra(
     calculator = Rep(**hypers)
     soaps = calculator.transform(geometries)
     results = soaps.get_features()
-    if feat_sparsefile is not None:
-        amat_file = feat_sparsefile.replace('fps', 'Amat')
-        if amat_file == feat_sparsefile:
-            raise ValueError("Must provide name of A-matrix file (could not "
-                             "derive from feature sparsification file)")
-        Amat = np.load(amat_file)
+    if Amat is not None:
+        if sparse_feat_idces is None:
+            LOGGER.warning(
+                "Found A-matrix for feature rescaling without sparse indices. "
+                "Proceeding anyway."
+            )
         results = results @ Amat
+    elif sparse_feat_idces is None:
+        LOGGER.warning(
+            "Found sparse feature indices without A-matrix; assuming no rescaling."
+        )
+    # TODO reshape/transpose the lambda=1 PS so that the mu index varies slowest
+    #      of all the descriptor dimensions
+    # And perhaps also correct the sign issue as well...? Or do this in the kernel?
     return results
 
 
@@ -205,34 +215,37 @@ def get_test_kernel(geometries, lambda_orders, hypers, kernel_zeta,
     Parameters
     ----------
 
-    geometries: list(ase.Atoms)
+    geometries : list(ase.Atoms)
         Atomic configurations to get kernel for
 
-    lambda_orders: list(int)
+    lambda_orders : list(int)
         Spherical tensor orders needed for the power spectra.  For a pure scalar
         kernel this is just 0, for a vector kernel generally it's [0, 1].
 
-    hypers: list(dict)
+    hypers : list(dict)
         Dictionary of SOAP hyperparameters, one for each entry of lambda_orders
 
-    kernel_zeta: int
+    kernel_zeta : int
         Power to raise the SOAP kernel to
 
-    PS_sparse: list(2-D array)
+    PS_sparse : list(2-D array)
         Power spectra for the model's "sparse" or "basis" points
         (shape N_sparse (x N_comp) x N_descriptor), one PS for each entry
         of lambda_orders)
         The first dimension of each PS must be equal
 
-    feat_sparsefile: list(filename), optional
-        Name of a feature sparsification file written by SOAPFAST
-        or TENSOAP (usually ending in `_fps.npy`)
-        One for each entry of lambda_orders
+    sparse_feat_idces : list(1-D array), optional
+        Indices of "sparse" features to select, in the format of the feature
+        sparsification file written by SOAPFAST or TENSOAP
+        (usually ending in `_fps.npy`).  This means it uses SOAPFAST
+        indexing, i.e. with redundant species pairs.
+        Supply one for each entry of lambda_orders
 
-    Amat_file: list(filename), optional
-        Name of the feature rescaling file also written out by SOAPFAST
-        or TENSOAP (if not given, will try to derive from 'feat_sparsefile')
-        One for each entry of lambda_orders
+    Amat : list(2-D array), optional
+        Feature rescaling matrix also written out by SOAPFAST
+        or TENSOAP (if not given, will default to the identity matrix)
+        Must be size DxD, where D is the feature dimension.
+        Supply one for each entry of lambda_orders
     """
     if feat_sparsefile is None:
         feat_sparsefile = itertools.repeat(None)
