@@ -139,35 +139,36 @@ def compute_power_spectra(
         sparsification, the features are reweighted (using the 'Amat' matrix)
         before being returned.
     """
+    soap_hypers = soap_hypers.copy()
     if lambda_ == 0:
         Rep = SphericalInvariants
     else:
         Rep = SphericalCovariants
-        hypers["covariant_lambda"] = lambda_
+        soap_hypers["covariant_lambda"] = lambda_
     if (n_sparse_components is not None) or (n_sparse_envs is not None):
         raise ValueError("Feature sparsification using librascal is not yet implemented."
                          "Please use a pre-generated sparse file instead.")
     if sparse_feat_idces is not None:
         if not species_list:
             species_list = np.unique(geometries[0].get_atomic_numbers())
-        n_max = hypers["max_radial"]
-        l_max = hypers["max_angular"]
+        n_max = soap_hypers["max_radial"]
+        l_max = soap_hypers["max_angular"]
         # Feature sparsification is directly implemented in SphericalInvariants
         #TODO use global_species in librascal so that the species list doesn't change?
         if lambda_ == 0:
             idx_mapping = _get_soapfast_to_librascal_idx_mapping(n_max, l_max, len(species_list))
             sparse_idces_rascal = idx_mapping[sparse_feat_idces]
-            soap_nonsparse = Rep(**hypers)
+            soap_nonsparse = Rep(**soap_hypers)
             feature_prescaling = _get_librascal_to_soapfast_rescaling(n_max, l_max, len(species_list))[sparse_idces_rascal]
             rascal_index_mapping = soap_nonsparse.get_feature_index_mapping()
             rascal_spinv_select_idces = [rascal_index_mapping[idx] for idx in sparse_idces_rascal]
-            hypers['coefficient_subselection'] = rascal_spinv_select_idces
+            soap_hypers['coefficient_subselection'] = rascal_spinv_select_idces
         else:
             # I would just get the features and manually pick out the columns
             raise ValueError("Feature sparsification not yet implemented for lambda != 0")
-    calculator = Rep(**hypers)
+    calculator = Rep(**soap_hypers)
     soaps = calculator.transform(geometries)
-    results = soaps.get_features()
+    results = soaps.get_features(calculator)
     if lambda_ == 1:
         n_points = results.shape[0]
         n_feat = results.shape[1]
@@ -214,7 +215,6 @@ def compute_vector_kernel(ps, ps_other=None, ps0=None, ps0_other=None, zeta=2):
     """
     if (zeta != 1.0) and (ps0 is None):
         raise ValueError("Must provide a scalar power spectrum for zeta != 1")
-    kernel_covariant
     if ps_other is None:
         ps_other = ps
         ps0_other = ps0
