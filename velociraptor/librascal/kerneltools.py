@@ -30,7 +30,6 @@ import ase.io
 import numpy as np
 
 from rascal.representations import SphericalInvariants, SphericalCovariants
-from rascal.representations.spherical_invariants import get_power_spectrum_index_mapping
 from rascal.models import Kernel
 
 from ..fitutils import transform_kernels, compute_residuals
@@ -71,12 +70,30 @@ def _get_soapfast_to_librascal_idx_mapping(n_max, l_max, n_species, lambda_=0):
     return soapfast_to_librascal_idx_mapping.flatten()
 
 
+def _get_librascal_to_soapfast_rescaling(n_max, l_max, n_species, lambda_=0):
+    """Return the feature scaling needed to match the soapfast kernel
+
+    This is because SOAPFAST stores redundant unlike-species entries, which
+    are consequently smaller by a factor of 1/sqrt(2) -- if using SOAPFAST
+    feature sparsification and rescaling, it is necessary to apply this
+    rescaling as well.
+    """
+    species_pair_block_size = n_max**2 * (l_max + 1)
+    scalings = np.ones((n_species*(n_species+1)//2, species_pair_block_size))
+    offset = 0
+    for row_idx in range(n_species):
+        row_scaligns = np.ones((n_species - row_idx,)) * 1.0/np.sqrt(2)
+        row_scaligns[0] = 1.0
+        scalings[offset : offset + n_species - row_idx] = row_scalings[:, np.newaxis]
+        offset = offset + n_species - row_idx
+    return scalings.flatten()
+
+
 def compute_power_spectra(
         geometries, soap_hypers,
         lambda_=0, n_sparse_envs=None, n_sparse_components=None,
         sparse_feat_idces=None, Amat=None, species_list=None):
     """Compute invariant or covariant power spectra using librascal
-
 
     Parameters
     ----------
@@ -110,7 +127,9 @@ def compute_power_spectra(
         Warning: librascal only works with sorted species lists,
         so if the SOAPFAST feature sparsification files were made
         with unsorted species lists, they should be transformed
-        or remade.
+        or remade.  There is no way to check that the SOAPFAST
+        files were made with sorted species lists, so please take
+        extra care to make sure that this was the case.
 
     Returns
     -------
@@ -126,20 +145,21 @@ def compute_power_spectra(
         Rep = SphericalCovariants
         hypers["covariant_lambda"] = lambda_
     if (n_sparse_components is not None) or (n_sparse_envs is not None):
-        raise ValueError("Feature sparsification with librascal is not yet implemented."
+        raise ValueError("Feature sparsification using librascal is not yet implemented."
                          "Please use a pre-generated sparse file instead.")
     if sparse_feat_idces is not None:
         if not species_list:
             species_list = np.unique(geometries[0].get_atomic_numbers())
-        species_pairs = [(species_list[i], species_list[j]) for i in range(len(species_list)) for j in range(i, len(species_list))]
-        n_max = hypers['max_radial']
-        l_max = hypers['max_angular']
+        n_max = hypers["max_radial"]
+        l_max = hypers["max_angular"]
         # Feature sparsification is directly implemented in SphericalInvariants
         #TODO use global_species in librascal so that the species list doesn't change?
-        if lambda_=0:
+        if lambda_ == 0:
             idx_mapping = _get_soapfast_to_librascal_idx_mapping(n_max, l_max, len(species_list))
             sparse_idces_rascal = idx_mapping[sparse_feat_idces]
-            rascal_index_mapping = get_power_spectrum_index_mapping(species_pairs, n_max, l_max)
+            soap_nonsparse = Rep(**hypers)
+            feature_prescaling = _get_librascal_to_soapfast_rescaling(n_max, l_max, len(species_list))[sparse_idces_rascal]
+            rascal_index_mapping = soap_nonsparse.get_feature_index_mapping()
             rascal_spinv_select_idces = [rascal_index_mapping[idx] for idx in sparse_idces_rascal]
             hypers['coefficient_subselection'] = rascal_spinv_select_idces
         else:
@@ -148,26 +168,31 @@ def compute_power_spectra(
     calculator = Rep(**hypers)
     soaps = calculator.transform(geometries)
     results = soaps.get_features()
+    if lambda_ == 1:
+        n_points = results.shape[0]
+        n_feat = results.shape[1]
+        # Transpose the "mu" dimension to the middle
+        results = results.reshape((n_points, n_feat//3, 3)).transpose((0, 2, 1))
     if Amat is not None:
         if sparse_feat_idces is None:
             LOGGER.warning(
                 "Found A-matrix for feature rescaling without sparse indices. "
                 "Proceeding anyway."
             )
-        results = results @ Amat
-    elif sparse_feat_idces is None:
+            feature_prescaling = np.ones((results.shape[1],))
+        results = results @ (feature_prescaling * Amat)
+    elif sparse_feat_idces is not None:
         LOGGER.warning(
-            "Found sparse feature indices without A-matrix; assuming no rescaling."
+            "Found sparse feature indices without A-matrix; assuming no rescaling.\n"
+            "If you are using SOAPFAST feature sparsification, you will likely get an incorrect result!"
         )
-    # TODO reshape/transpose the lambda=1 PS so that the mu index varies slowest
-    #      of all the descriptor dimensions
-    # And perhaps also correct the sign issue as well...? Or do this in the kernel?
     return results
 
 
-def apply_environment_sparsification(ps, env_sparse_file):
+def apply_environment_sparsification(ps, env_sparse_idces):
     """Apply a pre-computed environment sparsification selection"""
-    pass
+    #... is it really this simple?
+    return ps[env_sparse_idces]
 
 
 def compute_scalar_kernel(ps, ps_other=None, zeta=2):
@@ -202,7 +227,6 @@ def compute_vector_kernel(ps, ps_other=None, ps0=None, ps0_other=None, zeta=2):
     kernel_covariant = np.tensordot(ps, ps_other.T, axes=1).transpose((0, 3, 1, 2))
     if zeta != 1.0:
         kernel_scalar = (ps0 @ ps0_other.T)**(zeta - 1.0)
-        # Covariant kernel shape is (N1, N2, 
         kernel_covariant *= kernel_scalar[:, :, np.newaxis, np.newaxis]
     return kernel_covariant
 
